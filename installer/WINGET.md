@@ -126,6 +126,19 @@ pull request :
 >
 > (ou `winget install <Éditeur>.Ruche`)
 
+### Script fourni
+
+Le dépôt contient `installer\publier-winget.ps1`, qui enchaîne tout
+(création de la branche dans le fork, envoi des 4 manifestes, ouverture de la
+pull request) :
+
+```powershell
+# Prérequis : le fork doit exister
+gh repo fork microsoft/winget-pkgs --clone=false
+
+.\installer\publier-winget.ps1 -GitHubUser "hugo94z" -Publisher "Ruche" -Version "0.1.0"
+```
+
 ### Variante automatique
 
 Si vous préférez, l'outil officiel `wingetcreate` fait les trois étapes
