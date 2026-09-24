@@ -51,11 +51,3 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\lan_test.py
-
-      - name: Validations winget
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          .venv\Scripts\python.exe -m PyInstaller ruche.spec --noconfirm --clean --log-level ERROR
-          .\installer\preparer-winget.ps1 -GitHubUser "hugo94z" -Publisher "Ruche" -Version "0.1.0"
-          winget validate --manifest "winget\manifests\r\Ruche\Ruche\0.1.0"
