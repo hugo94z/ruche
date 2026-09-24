@@ -1,0 +1,4 @@
+[
+  { "urls": "stun:stun.l.google.com:19302" },
+  { "urls": "turn:192.168.1.10:3478", "username": "ruche", "credential": "ruchepass" }
+]

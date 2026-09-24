@@ -1,0 +1,39 @@
+# Serveur de rendez-vous + relais TURN, pour un déploiement « clé en main ».
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# Le rendez-vous n'est PAS un hôte : il ne stocke rien et ne peut pas faire
+# tomber une conversation. Le relais TURN sert de secours quand le NAT bloque
+# le pair-à-pair.
+#
+# Pensez à remplacer TURN_PASSWORD et le domaine/IP par les vôtres.
+
+services:
+  rendezvous:
+    image: python:3.13-slim
+    working_dir: /app
+    volumes:
+      - ..:/app
+    command: python run_rendezvous.py --host 0.0.0.0 --port 8765
+    ports:
+      - "8765:8765"
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    command: >
+      -n
+      --log-file=stdout
+      --fingerprint
+      --lt-cred-mech
+      --realm=ruche
+      --user=ruche:${TURN_PASSWORD:-ruchepass}
+      --min-port=49160
+      --max-port=49200
+      --no-cli
+      --no-multicast-peers
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "49160-49200:49160-49200/udp"
+    restart: unless-stopped

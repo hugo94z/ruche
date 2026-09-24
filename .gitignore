@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.sqlite3
+identity.json
+tools/_*.log
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# Sorties générées
+installer/Output/
+winget/
