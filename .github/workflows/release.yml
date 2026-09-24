@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (ex. 0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Determiner la version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $v = "${{ inputs.version }}"
+          } else {
+            $v = "${{ github.ref_name }}".TrimStart("v")
+          }
+          "value=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Version : $v"
+
+      - name: Installer les dependances
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python.exe -m pip install --upgrade pip
+          .venv\Scripts\python.exe -m pip install -r requirements.txt pyinstaller
+
+      - name: Empaqueter l'application (PyInstaller)
+        shell: pwsh
+        run: .venv\Scripts\python.exe -m PyInstaller ruche.spec --noconfirm --clean --log-level WARN
+
+      - name: Compiler l'installateur (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ruche.iss `
+              /DAppVersion=${{ steps.version.outputs.value }} /DPublisher=Ruche
+
+      - name: Generer les manifestes winget
+        shell: pwsh
+        run: |
+          .\installer\preparer-winget.ps1 `
+              -GitHubUser "${{ github.repository_owner }}" `
+              -Publisher "Ruche" -PackageName "Ruche" `
+              -Version "${{ steps.version.outputs.value }}"
+          winget validate --manifest "winget\manifests\r\Ruche\Ruche\${{ steps.version.outputs.value }}"
+
+      - name: Publier la version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $asset = "installer\Output\Ruche-Setup-${{ steps.version.outputs.value }}.exe"
+          gh release create "v${{ steps.version.outputs.value }}" $asset `
+            --title "Ruche ${{ steps.version.outputs.value }}" `
+            --generate-notes --latest
+
+      - name: Conserver les manifestes winget
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests-${{ steps.version.outputs.value }}
+          path: winget/manifests

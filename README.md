@@ -227,3 +227,18 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 Le résultat se trouve dans `dist\Ruche\Ruche.exe`.
+
+### Publication automatique
+
+Pousser un tag `vX.Y.Z` déclenche `.github/workflows/release.yml` : construction
+de l'application, compilation de l'installateur, génération et validation des
+manifestes winget, puis publication de la release GitHub avec l'installateur en
+pièce jointe.
+
+```powershell
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Le workflow `CI` (`ci.yml`) rejoue les quatre suites de tests à chaque
+modification.

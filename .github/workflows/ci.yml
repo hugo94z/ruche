@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Installer les dependances
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python.exe -m pip install --upgrade pip
+          .venv\Scripts\python.exe -m pip install -r requirements.txt
+
+      - name: Socle (maillage, chat, fichiers, bascule d'hote)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\smoke_test.py
+
+      - name: Appels et partage d'ecran
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\call_test.py
+
+      - name: Interface (hors ecran)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+          QT_QPA_PLATFORM: offscreen
+        run: .venv\Scripts\python.exe tools\gui_test.py
+
+      # mDNS peut etre bloque sur les runners : informatif, non bloquant.
+      - name: Decouverte locale (mDNS)
+        shell: pwsh
+        continue-on-error: true
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\lan_test.py
+
+      - name: Validations winget
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          .venv\Scripts\python.exe -m PyInstaller ruche.spec --noconfirm --clean --log-level ERROR
+          .\installer\preparer-winget.ps1 -GitHubUser "hugo94z" -Publisher "Ruche" -Version "0.1.0"
+          winget validate --manifest "winget\manifests\r\Ruche\Ruche\0.1.0"
