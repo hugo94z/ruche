@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Génère les manifestes winget pour Ruche à partir de l'installateur compilé.
 
@@ -7,13 +7,17 @@
     manifestes attendue par le dépôt microsoft/winget-pkgs :
 
         manifests\<initiale>\<Éditeur>\<Paquet>\<Version>\
-            <Éditeur>.<Paquet>.yaml
+            <Éditeur>.<Paquet>.yaml                  (version, DefaultLocale)
             <Éditeur>.<Paquet>.installer.yaml
-            <Éditeur>.<Paquet>.locale.fr-FR.yaml
-            <Éditeur>.<Paquet>.locale.en-US.yaml
+            <Éditeur>.<Paquet>.locale.fr-FR.yaml     (defaultLocale)
+            <Éditeur>.<Paquet>.locale.en-US.yaml     (locale)
 
 .EXEMPLE
-    .\installer\preparer-winget.ps1 -GitHubUser "moncompte"
+    .\installer\preparer-winget.ps1 -GitHubUser "hugo94z"
+
+.NOTE
+    Ce fichier doit rester enregistré en UTF-8 AVEC BOM, sinon PowerShell 5.1
+    lit les accents en ANSI et les corrompt.
 #>
 
 [CmdletBinding()]
@@ -24,6 +28,7 @@ param(
     [string]$PackageName = "Ruche",
     [string]$Version = "0.1.0",
     [string]$License = "MIT",
+    [string]$DefaultLocale = "fr-FR",
     [string]$InstallerPath = "",
     [string]$OutputDir = ""
 )
@@ -35,6 +40,12 @@ if (-not $InstallerPath) {
     $InstallerPath = Join-Path $root "installer\Output\Ruche-Setup-$Version.exe"
 }
 if (-not $OutputDir) { $OutputDir = Join-Path $root "winget" }
+
+# Écrit du texte en UTF-8 SANS BOM (les manifestes doivent rester propres).
+function Write-Utf8([string]$Path, [string]$Text) {
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Text, $encoding)
+}
 
 $AppId = "{8F6C2A54-3D71-4B9E-9A2F-5C1E7B4D0A33}"
 
@@ -53,21 +64,23 @@ $versionDir = Join-Path $OutputDir "manifests\$($Publisher.Substring(0,1).ToLowe
 New-Item -ItemType Directory -Force -Path $versionDir | Out-Null
 
 $url = "https://github.com/$GitHubUser/$Repo/releases/download/v$Version/$($installer.Name)"
-$homepage = "https://github.com/$GitHubUser/$Repo"
-$repoUrl = $homepage
-$manifestVersion = "1.10.0"
+$repoUrl = "https://github.com/$GitHubUser/$Repo"
+$mv = "1.10.0"
+$schemaBase = "https://aka.ms/winget-manifest"
 
 # --- Version -------------------------------------------------------------
-@"
+Write-Utf8 (Join-Path $versionDir "$packageId.yaml") @"
+# yaml-language-server: `$schema=$schemaBase.version.$mv.schema.json
 PackageIdentifier: $packageId
 PackageVersion: $Version
-DefaultLocale: fr-FR
+DefaultLocale: $DefaultLocale
 ManifestType: version
-ManifestVersion: $manifestVersion
-"@ | Set-Content -Encoding UTF8 (Join-Path $versionDir "$packageId.yaml")
+ManifestVersion: $mv
+"@
 
 # --- Installer -----------------------------------------------------------
-@"
+Write-Utf8 (Join-Path $versionDir "$packageId.installer.yaml") @"
+# yaml-language-server: `$schema=$schemaBase.installer.$mv.schema.json
 PackageIdentifier: $packageId
 PackageVersion: $Version
 InstallerType: inno
@@ -86,11 +99,12 @@ Installers:
     InstallerUrl: $url
     InstallerSha256: $hash
 ManifestType: installer
-ManifestVersion: $manifestVersion
-"@ | Set-Content -Encoding UTF8 (Join-Path $versionDir "$packageId.installer.yaml")
+ManifestVersion: $mv
+"@
 
-# --- Locale fr-FR --------------------------------------------------------
-@"
+# --- Locale par défaut (fr-FR) -------------------------------------------
+Write-Utf8 (Join-Path $versionDir "$packageId.locale.fr-FR.yaml") @"
+# yaml-language-server: `$schema=$schemaBase.defaultLocale.$mv.schema.json
 PackageIdentifier: $packageId
 PackageVersion: $Version
 PackageLocale: fr-FR
@@ -118,11 +132,12 @@ Tags:
   - partage-ecran
 ReleaseNotesUrl: $repoUrl/releases/tag/v$Version
 ManifestType: defaultLocale
-ManifestVersion: $manifestVersion
-"@ | Set-Content -Encoding UTF8 (Join-Path $versionDir "$packageId.locale.fr-FR.yaml")
+ManifestVersion: $mv
+"@
 
-# --- Locale en-US --------------------------------------------------------
-@"
+# --- Locale secondaire (en-US) -------------------------------------------
+Write-Utf8 (Join-Path $versionDir "$packageId.locale.en-US.yaml") @"
+# yaml-language-server: `$schema=$schemaBase.locale.$mv.schema.json
 PackageIdentifier: $packageId
 PackageVersion: $Version
 PackageLocale: en-US
@@ -139,7 +154,6 @@ Description: |-
   sharing, group audio/video calls and screen sharing. No central server is
   required: peers connect directly to each other and the host role fails over
   automatically.
-Moniker: ruche
 Tags:
   - chat
   - messaging
@@ -149,14 +163,14 @@ Tags:
   - video-call
   - screen-sharing
 ReleaseNotesUrl: $repoUrl/releases/tag/v$Version
-ManifestType: defaultLocale
-ManifestVersion: $manifestVersion
-"@ | Set-Content -Encoding UTF8 (Join-Path $versionDir "$packageId.locale.en-US.yaml")
+ManifestType: locale
+ManifestVersion: $mv
+"@
 
 Write-Host ""
-Write-Host "Manifestes écrits dans :"
+Write-Host "Manifestes ecrits dans :"
 Write-Host "  $versionDir" -ForegroundColor Green
 Get-ChildItem $versionDir | ForEach-Object { Write-Host "    $($_.Name)" }
 Write-Host ""
-Write-Host "Étape suivante : publier l'installateur puis ouvrir une PR."
+Write-Host "Validation : winget validate --manifest `"$versionDir`""
 Write-Host "Voir installer\WINGET.md" -ForegroundColor Cyan

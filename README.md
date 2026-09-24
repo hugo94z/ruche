@@ -33,6 +33,23 @@ Toutes les phases de la feuille de route sont réalisées (voir plus bas).
 
 ## Installation
 
+### Windows — installateur ou winget
+
+Téléchargez **`Ruche-Setup-0.1.0.exe`** depuis la page des versions :
+
+<https://github.com/hugo94z/ruche/releases/latest>
+
+L'installation se fait **par utilisateur** (aucun droit administrateur requis),
+dans `%LOCALAPPDATA%\Programs\Ruche`.
+
+Une fois le paquet accepté dans le catalogue winget :
+
+```powershell
+winget install Ruche.Ruche
+```
+
+### Depuis les sources
+
 Python **3.13** est requis.
 
 ```powershell

@@ -17,6 +17,16 @@ Sur le **Bureau**, double-cliquez sur le raccourci **Ruche**.
 > `dist\Ruche\Ruche.exe` (aucun Python requis pour l'utiliser).
 > S'il n'existe pas encore, il pointe vers `run.py` de l'environnement local.
 
+### Installation (Windows)
+
+| Méthode | Commande |
+|---|---|
+| Installateur | `Ruche-Setup-0.1.0.exe` (page des versions GitHub) |
+| winget | `winget install Ruche.Ruche` |
+
+L'installation se fait **par utilisateur**, dans `%LOCALAPPDATA%\Programs\Ruche`
+(aucun droit administrateur requis).
+
 ### Autres façons de lancer
 
 | Méthode | Commande |
