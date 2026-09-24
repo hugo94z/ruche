@@ -205,6 +205,24 @@ winget uninstall Ruche
 | SHA-256 | `6BCEF5B5D83F295471546A188A344F2FB8A1F7B8BCD71E0E11C784F8640F9442` |
 | Fork winget | `hugo94z/winget-pkgs` |
 | Emplacement des manifestes | `manifests/r/Ruche/Ruche/0.1.0/` |
+| Pull request | <https://github.com/microsoft/winget-pkgs/pull/440771> |
+
+### Statut de la soumission
+
+La pull request est ouverte. Deux choses restent à faire :
+
+1. **Signer le CLA Microsoft** — le bot ajoute le label `Needs-CLA` et publie un
+   lien dans la PR. C'est un accord légal lié au compte GitHub : seul le
+   propriétaire du compte peut le signer.
+2. Laisser la **validation automatique** se terminer (`Manifest Validation`,
+   `Installation Validation`, `Installers Scan`…). Un mainteneur fusionne
+   ensuite la PR.
+
+Une fois fusionnée, l'installation se fait avec :
+
+```powershell
+winget install Ruche.Ruche
+```
 
 Régénération complète :
 
