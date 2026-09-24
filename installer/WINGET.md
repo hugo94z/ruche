@@ -175,3 +175,47 @@ fonctionnalités** Windows. La désinstallation se fait donc normalement :
 ```powershell
 winget uninstall Ruche
 ```
+
+---
+
+## 10. Configuration retenue pour ce projet
+
+| Élément | Valeur |
+|---|---|
+| Compte GitHub | `hugo94z` |
+| Dépôt | <https://github.com/hugo94z/ruche> |
+| `PackageIdentifier` | `Ruche.Ruche` |
+| Éditeur affiché | Ruche |
+| Version | `0.1.0` |
+| Release | <https://github.com/hugo94z/ruche/releases/tag/v0.1.0> |
+| Installeur | `Ruche-Setup-0.1.0.exe` (70,7 Mo) |
+| SHA-256 | `6BCEF5B5D83F295471546A188A344F2FB8A1F7B8BCD71E0E11C784F8640F9442` |
+| Fork winget | `hugo94z/winget-pkgs` |
+| Emplacement des manifestes | `manifests/r/Ruche/Ruche/0.1.0/` |
+
+Régénération complète :
+
+```powershell
+# 1. Compiler l'installateur
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\ruche.iss `
+    /DPublisher=Ruche /DAppVersion=0.1.0
+
+# 2. Générer les manifestes (recalcule le SHA-256)
+.\installer\preparer-winget.ps1 -GitHubUser "hugo94z" -Publisher "Ruche" `
+    -PackageName "Ruche" -Version "0.1.0"
+
+# 3. Valider
+winget validate --manifest "winget\manifests\r\Ruche\Ruche\0.1.0"
+```
+
+> Le script `preparer-winget.ps1` doit rester enregistré en **UTF-8 avec BOM**,
+> sinon PowerShell 5.1 lit les accents en ANSI et corrompt les descriptions.
+
+### Avertissement de sécurité
+
+Le `GITHUB_TOKEN` présent dans l'environnement donne un accès très large au
+compte (`admin:org`, `delete_repo`, `workflow`…). Il est pratique pour publier,
+mais il est recommandé d'utiliser pour cette tâche un **jeton à portée
+restreinte** (`repo`, `workflow`) et de le révoquer une fois la publication
+terminée.
+
