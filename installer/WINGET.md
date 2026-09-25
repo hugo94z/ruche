@@ -148,7 +148,7 @@ Si vous préférez, l'outil officiel `wingetcreate` fait les trois étapes
 winget install Microsoft.WingetCreate -e
 
 # Générer depuis l'URL de la release
-wingetcreate new "https://github.com/<compte>/ruche/releases/download/v0.1.0/Ruche-Setup-0.1.0.exe"
+wingetcreate new "https://github.com/<compte>/ruche/releases/download/v0.2.0/Ruche-Setup-0.2.0.exe"
 
 # Soumettre (nécessite un jeton GitHub avec le droit de fork/PR)
 wingetcreate submit --token <TOKEN> .\manifests
@@ -199,24 +199,29 @@ winget uninstall Ruche
 | Dépôt | <https://github.com/hugo94z/ruche> |
 | `PackageIdentifier` | `Ruche.Ruche` |
 | Éditeur affiché | Ruche |
-| Version | `0.1.0` |
-| Release | <https://github.com/hugo94z/ruche/releases/tag/v0.1.0> |
-| Installeur | `Ruche-Setup-0.1.0.exe` (70,7 Mo) |
-| SHA-256 | `6BCEF5B5D83F295471546A188A344F2FB8A1F7B8BCD71E0E11C784F8640F9442` |
+| Version | `0.2.0` |
+| Release | <https://github.com/hugo94z/ruche/releases/tag/v0.2.0> |
+| Installeur | `Ruche-Setup-0.2.0.exe` (70,7 Mo) |
+| SHA-256 | `C2C9AFC1F3E317F09B1BB7F886642DD018555027E922A5E054B8F4CC01C598FE` |
 | Fork winget | `hugo94z/winget-pkgs` |
-| Emplacement des manifestes | `manifests/r/Ruche/Ruche/0.1.0/` |
-| Pull request | <https://github.com/microsoft/winget-pkgs/pull/440771> |
+| Emplacement des manifestes | `manifests/r/Ruche/Ruche/0.2.0/` |
+| Pull request | <https://github.com/microsoft/winget-pkgs/pull/441055> |
+| Soumission 0.1.0 | fermée (#440771), remplacée par la 0.2.0 |
 
 ### Statut de la soumission
 
-La pull request est ouverte. Deux choses restent à faire :
+La pull request **#441055** (version 0.2.0) est ouverte.
 
-1. **Signer le CLA Microsoft** — le bot ajoute le label `Needs-CLA` et publie un
-   lien dans la PR. C'est un accord légal lié au compte GitHub : seul le
-   propriétaire du compte peut le signer.
-2. Laisser la **validation automatique** se terminer (`Manifest Validation`,
-   `Installation Validation`, `Installers Scan`…). Un mainteneur fusionne
-   ensuite la PR.
+- ✅ **CLA Microsoft signé** — une fois pour toutes pour ce compte ;
+- ⏳ **validation automatique** (`Manifest Validation`, `Installation
+  Validation`, `Installers Scan`…) ;
+- ⏳ **revue d'un mainteneur** : `REVIEW_REQUIRED`. Seul un mainteneur peut
+  approuver ; l'auteur ne peut pas approuver sa propre PR.
+
+La soumission 0.1.0 (#440771) a été **fermée et remplacée**. Leçon retenue :
+modifier une PR existante en échangeant la version fait réagir le robot de
+validation (`noContent` / `Unexpected-File`). Pour une nouvelle version, on
+ouvre donc **une nouvelle PR** et on ferme l'ancienne.
 
 Une fois fusionnée, l'installation se fait avec :
 
@@ -229,15 +234,23 @@ Régénération complète :
 ```powershell
 # 1. Compiler l'installateur
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\ruche.iss `
-    /DPublisher=Ruche /DAppVersion=0.1.0
+    /DPublisher=Ruche /DAppVersion=0.2.0
 
 # 2. Générer les manifestes (recalcule le SHA-256)
 .\installer\preparer-winget.ps1 -GitHubUser "hugo94z" -Publisher "Ruche" `
-    -PackageName "Ruche" -Version "0.1.0"
+    -PackageName "Ruche" -Version "0.2.0"
 
 # 3. Valider
-winget validate --manifest "winget\manifests\r\Ruche\Ruche\0.1.0"
+winget validate --manifest "winget\manifests\r\Ruche\Ruche\0.2.0"
+
+# 4. Publier (branche + manifestes + PR)
+.\installer\publier-winget.ps1 -GitHubUser "hugo94z" -Publisher "Ruche" `
+    -PackageName "Ruche" -Version "0.2.0"
 ```
+
+> ⚠️ **Ne jamais remplacer** l'installateur d'une release publiée : le SHA-256
+> du manifeste winget deviendrait invalide et le paquet serait refusé. Pour
+> corriger un binaire, publier une **nouvelle version**.
 
 > Le script `preparer-winget.ps1` doit rester enregistré en **UTF-8 avec BOM**,
 > sinon PowerShell 5.1 lit les accents en ANSI et corrompt les descriptions.
