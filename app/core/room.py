@@ -24,6 +24,7 @@ le **salon actif**.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import struct
 import time
@@ -297,6 +298,8 @@ class RoomSession:
             # Reprendre les transferts interrompus à partir du dernier octet reçu.
             for file_id in self.files.incoming_ids():
                 self._loop.create_task(self.request_file(file_id))
+            # Livrer les messages différés en attente pour ce pair.
+            self._loop.create_task(self.hub.flush_mailbox(peer_id, self.transport))
 
     async def _retry_link(self, peer_id: str) -> None:
         """Reconnecte un pair toujours présent mais dont le lien a échoué.
@@ -330,6 +333,7 @@ class RoomSession:
                 "id": self.identity.peer_id,
                 "pseudo": self.identity.pseudo,
                 "pub": self.identity.public_key,
+                "enc": self.identity.enc_public,
             },
         )
         await self.transport.send_to(
@@ -344,6 +348,7 @@ class RoomSession:
                 data.get("id", peer_id),
                 data.get("pseudo", ""),
                 data.get("pub", ""),
+                data.get("enc", ""),
             )
         elif kind == "chat":
             entry = data.get("entry", {})
@@ -377,6 +382,15 @@ class RoomSession:
         elif kind == "call-end":
             if self.call_active and self._loop is not None:
                 self._loop.create_task(self.end_call(notify=False))
+        elif kind == "mail":
+            mail_id = data.get("id", "")
+            self.hub.receive_mail(peer_id, mail_id, data.get("blob", ""))
+            if mail_id and self._loop is not None:
+                self._loop.create_task(
+                    self.transport.send_to(peer_id, {"t": "mail-ack", "ids": [mail_id]})
+                )
+        elif kind == "mail-ack":
+            self.hub.ack_mail(data.get("ids", []))
         elif kind == "bye":
             self._forget_member(peer_id)
 
@@ -412,6 +426,17 @@ class RoomSession:
                 self._maybe_auto_fetch(entry)
 
     # --- Envoi d'un message ----------------------------------------------
+    async def _deliver(self, raw: dict) -> None:
+        """Achemine une entrée : diffusion directe, ou boîte aux lettres.
+
+        Dans un message privé dont le pair est hors ligne, l'entrée est
+        scellée pour lui et mise en attente jusqu'à la prochaine connexion.
+        """
+        if self.is_dm and self.peer_id:
+            await self.hub.deliver_dm(self, raw)
+        else:
+            await self.transport.broadcast({"t": "chat", "entry": raw})
+
     async def send_text(self, body: str) -> None:
         body = body.strip()
         if not body or not self.room:
@@ -425,7 +450,7 @@ class RoomSession:
         view = self.history.display(raw)
         if view is not None:
             self._emit("message", view)
-        await self.transport.broadcast({"t": "chat", "entry": raw})
+        await self._deliver(raw)
 
     async def edit_message(self, message_id: str, body: str) -> None:
         body = body.strip()
@@ -441,7 +466,7 @@ class RoomSession:
         view = self.history.display(raw)
         if view is not None:
             self._emit("message", view)
-        await self.transport.broadcast({"t": "chat", "entry": raw})
+        await self._deliver(raw)
 
     async def delete_message(self, message_id: str) -> None:
         if not message_id or not self.room:
@@ -456,7 +481,7 @@ class RoomSession:
         view = self.history.display(raw)
         if view is not None:
             self._emit("message", view)
-        await self.transport.broadcast({"t": "chat", "entry": raw})
+        await self._deliver(raw)
 
     async def toggle_reaction(self, message_id: str, emoji: str) -> None:
         if not message_id or not emoji or not self.room:
@@ -472,7 +497,7 @@ class RoomSession:
         view = self.history.display(raw)
         if view is not None:
             self._emit("message", view)
-        await self.transport.broadcast({"t": "chat", "entry": raw})
+        await self._deliver(raw)
 
     # --- Fichiers ---------------------------------------------------------
     async def send_file(self, path) -> None:
@@ -489,7 +514,7 @@ class RoomSession:
         view = self.history.display(raw)
         if view is not None:
             self._emit("message", view)
-        await self.transport.broadcast({"t": "chat", "entry": raw})
+        await self._deliver(raw)
 
     async def request_file(self, file_id: str, offset: int = 0) -> None:
         local = self.files.path(file_id)
@@ -954,8 +979,9 @@ class RoomManager:
         if session is None:
             return
         was_active = room == self.active_code
-        if was_active:
-            await session.stop()
+        # Toujours arrêter le salon, même s'il n'est pas actif : sinon son
+        # rendez-vous, sa découverte locale et son maillage fuiraient.
+        await session.stop()
         self._unread.pop(room, None)
         if was_active:
             next_code = next(iter(self.rooms), None)
@@ -980,7 +1006,12 @@ class RoomManager:
         self._muted = {pid for pid, row in self._trust.items() if row.get("muted")}
 
     def _register_peer(
-        self, session: RoomSession, peer_id: str, pseudo: str, public_key: str
+        self,
+        session: RoomSession,
+        peer_id: str,
+        pseudo: str,
+        public_key: str,
+        enc_key: str = "",
     ) -> None:
         """Enregistre un pair et sa clé (confiance à la première vue).
 
@@ -1003,9 +1034,96 @@ class RoomManager:
                     },
                 )
                 return
-            self.storage.remember_peer(peer_id, public_key, pseudo)
+            self.storage.remember_peer(peer_id, public_key, pseudo, enc_key)
         self._load_trust()
         session._add_member(peer_id, pseudo)
+
+    # --- Boîte aux lettres : livraison différée ---------------------------
+    async def deliver_dm(self, session: RoomSession, raw: dict) -> None:
+        """Envoie un message privé, ou le met en boîte s'il est hors ligne."""
+        peer = session.peer_id
+        if not peer:
+            return
+        link = session.transport.links.get(peer)
+        if link is not None and link.ready.is_set():
+            if await session.transport.send_to(peer, {"t": "chat", "entry": raw}):
+                return
+        if self._queue_mail(raw, peer):
+            # Le pair est peut-être joignable par un autre salon commun.
+            await self.flush_mailbox_everywhere(peer)
+
+    def _queue_mail(self, raw: dict, peer: str) -> bool:
+        row = self._trust.get(peer) or {}
+        enc_key = row.get("enc_key") or ""
+        if not enc_key:
+            self._emit("status", f"impossible de chiffrer pour {peer[:8]} (clé inconnue)")
+            return False
+        payload = json.dumps(raw, ensure_ascii=False).encode("utf-8")
+        blob = crypto.seal(enc_key, payload)
+        self.storage.queue_mail(raw["id"], peer, blob)
+        self._emit("status", "message privé mis en attente de livraison")
+        return True
+
+    async def flush_mailbox(self, peer_id: str, transport) -> None:
+        """Tente de remettre les messages en attente pour ``peer_id``."""
+        for mail in self.storage.mails_for(peer_id):
+            sent = await transport.send_to(
+                peer_id, {"t": "mail", "id": mail["id"], "blob": mail["blob"]}
+            )
+            if not sent:
+                return
+
+    async def flush_mailbox_everywhere(self, peer_id: str) -> None:
+        """Vide la boîte vers le premier salon où le pair est joignable."""
+        for session in list(self.rooms.values()):
+            link = session.transport.links.get(peer_id)
+            if link is not None and link.ready.is_set():
+                await self.flush_mailbox(peer_id, session.transport)
+                return
+
+    def ack_mail(self, ids: list) -> None:
+        for entry_id in ids or []:
+            if isinstance(entry_id, str) and entry_id:
+                self.storage.delete_mail(entry_id)
+
+    def receive_mail(self, peer_id: str, mail_id: str, blob: str) -> None:
+        """Ouvre un message différé et l'intègre à la conversation privée."""
+        if not mail_id or not blob or self.is_blocked(peer_id):
+            return
+        plain = crypto.unseal(self.identity.enc_private, blob)
+        if plain is None:
+            self._emit("status", "message différé illisible (sceau invalide)")
+            return
+        try:
+            entry = json.loads(plain.decode("utf-8"))
+        except ValueError:
+            return
+        if not isinstance(entry, dict) or entry.get("origin") != peer_id:
+            return
+        self._persist_dm_entry(entry)
+
+    def _persist_dm_entry(self, entry: dict) -> None:
+        code = dm_key(entry["origin"], self.identity.peer_id)
+        session = self.rooms.get(code)
+        if session is not None:
+            for added in session.history.merge([entry]):
+                view = session.history.display(added)
+                if view is not None:
+                    session._emit("message", view)
+            return
+        # Conversation non ouverte : on persiste pour plus tard.
+        log = HistoryLog(self.storage)
+        log.configure(self.identity.private_key, self.identity.public_key)
+        log.load_room(code)
+        if log.merge([entry]):
+            self._emit(
+                "mail-received",
+                {
+                    "peer_id": entry["origin"],
+                    "pseudo": entry.get("pseudo", "") or self._pseudo_of(entry["origin"]),
+                    "entry": entry,
+                },
+            )
 
     def is_blocked(self, peer_id: str) -> bool:
         return peer_id in self._blocked

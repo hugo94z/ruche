@@ -61,6 +61,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\messaging_test.py
 
+      - name: Hors ligne (boite aux lettres chiffree, livraison differee)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\offline_test.py
+
       - name: Media (cadence 30 fps, ecran, annulation d'echo)
         shell: pwsh
         env:

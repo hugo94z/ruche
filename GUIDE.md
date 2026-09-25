@@ -119,6 +119,16 @@ Bouton **Périphériques** (fenêtre principale) : caméra, micro, haut-parleur.
 - Les images reçues s'affichent en **vignette** ; un clic ouvre l'original.
 - Un transfert interrompu **reprend au dernier octet reçu** à la reconnexion.
 
+### 3.8 Écrire à un pair hors ligne
+
+- Vous pouvez envoyer un **message privé** même si le correspondant n'est pas
+  connecté : il est **chiffré** et mis en attente sur votre machine.
+- Dès que le correspondant réapparaît (dans un salon commun ou dans la
+  conversation), le message lui est **remis automatiquement**, puis effacé de
+  votre boîte après **accusé de réception**.
+- Si le correspondant n'est jamais revenu, le message reste en attente : il n'y
+  a **pas de serveur** pour le garder à votre place.
+
 ---
 
 ## 4. Les trois façons de se connecter
@@ -240,6 +250,7 @@ Résultat : `dist\Ruche\Ruche.exe`
 .\.venv\Scripts\python.exe tools\lan_test.py     # découverte mDNS sans serveur
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\messaging_test.py  # multi-salons, édition, réactions, reprise, MP
+.\.venv\Scripts\python.exe tools\offline_test.py  # boîte aux lettres chiffrée, livraison différée
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface hors écran
 ```
 
@@ -279,8 +290,9 @@ app/
   config.py                 paramètres et chemins
   i18n.py                   chaînes de l'interface (français)
   core/
-    identity.py             identité locale
-    storage.py              stockage SQLite
+    identity.py             identité locale (signature + chiffrement)
+    storage.py              stockage SQLite (+ boîte aux lettres)
+    crypto.py               signature Ed25519 + scellement X25519
     history.py              journal répliqué (+ édition/réactions)
     files.py                magasin de fichiers, vignettes, reprise
     media.py                caméra, micro, haut-parleur, écran

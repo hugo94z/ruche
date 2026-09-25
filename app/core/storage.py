@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE TABLE IF NOT EXISTS peers (
     peer_id    TEXT PRIMARY KEY,
     public_key TEXT NOT NULL DEFAULT '',
+    enc_key    TEXT NOT NULL DEFAULT '',
     pseudo     TEXT NOT NULL DEFAULT '',
     verified   INTEGER NOT NULL DEFAULT 0,
     blocked    INTEGER NOT NULL DEFAULT 0,
@@ -47,7 +48,20 @@ CREATE TABLE IF NOT EXISTS peers (
     first_seen REAL NOT NULL,
     last_seen  REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS mailbox (
+    id         TEXT PRIMARY KEY,
+    peer_id    TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    blob       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mailbox_peer ON mailbox(peer_id, created_at);
 """
+
+# Colonnes ajoutées après coup : migration douce des bases existantes.
+_MIGRATIONS = (
+    ("peers", "enc_key", "TEXT NOT NULL DEFAULT ''"),
+)
 
 
 class Storage:
@@ -58,7 +72,17 @@ class Storage:
         self._conn.row_factory = sqlite3.Row
         with self._lock:
             self._conn.executescript(SCHEMA)
+            self._migrate()
             self._conn.commit()
+
+    def _migrate(self) -> None:
+        for table, column, decl in _MIGRATIONS:
+            columns = {
+                row["name"]
+                for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column not in columns:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     # --- Messages ---------------------------------------------------------
     def add_message(self, entry: dict, room: str) -> None:
@@ -149,32 +173,36 @@ class Storage:
             self._conn.commit()
 
     # --- Pairs de confiance ----------------------------------------------
-    def remember_peer(self, peer_id: str, public_key: str, pseudo: str) -> None:
+    def remember_peer(
+        self, peer_id: str, public_key: str, pseudo: str, enc_key: str = ""
+    ) -> None:
         """Mémorise la clé publique d'un pair. Une clé déjà connue n'est
         **jamais** remplacée : c'est ce qui permet de détecter une usurpation."""
         now = time.time()
         with self._lock:
             row = self._conn.execute(
-                "SELECT public_key FROM peers WHERE peer_id = ?", (peer_id,)
+                "SELECT public_key, enc_key FROM peers WHERE peer_id = ?", (peer_id,)
             ).fetchone()
             if row is None:
                 self._conn.execute(
-                    "INSERT INTO peers (peer_id, public_key, pseudo, first_seen, last_seen)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (peer_id, public_key, pseudo, now, now),
+                    "INSERT INTO peers"
+                    " (peer_id, public_key, enc_key, pseudo, first_seen, last_seen)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (peer_id, public_key, enc_key, pseudo, now, now),
                 )
             else:
                 self._conn.execute(
                     "UPDATE peers SET pseudo = COALESCE(NULLIF(?, ''), pseudo),"
+                    " enc_key = CASE WHEN enc_key = '' THEN ? ELSE enc_key END,"
                     " last_seen = ? WHERE peer_id = ?",
-                    (pseudo, now, peer_id),
+                    (pseudo, enc_key, now, peer_id),
                 )
             self._conn.commit()
 
     def peer(self, peer_id: str) -> dict | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT peer_id, public_key, pseudo, verified, blocked, muted"
+                "SELECT peer_id, public_key, enc_key, pseudo, verified, blocked, muted"
                 " FROM peers WHERE peer_id = ?",
                 (peer_id,),
             ).fetchone()
@@ -183,7 +211,7 @@ class Storage:
     def all_peers(self) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT peer_id, public_key, pseudo, verified, blocked, muted"
+                "SELECT peer_id, public_key, enc_key, pseudo, verified, blocked, muted"
                 " FROM peers ORDER BY pseudo COLLATE NOCASE"
             ).fetchall()
         return [dict(row) for row in rows]
@@ -218,6 +246,35 @@ class Storage:
                 "SELECT code FROM rooms ORDER BY joined_at DESC LIMIT ?", (limit,)
             ).fetchall()
         return [row["code"] for row in rows]
+
+    # --- Boîte aux lettres (messages différés chiffrés) -------------------
+    def queue_mail(self, entry_id: str, peer_id: str, blob: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO mailbox (id, peer_id, created_at, blob)"
+                " VALUES (?, ?, ?, ?)",
+                (entry_id, peer_id, time.time(), blob),
+            )
+            self._conn.commit()
+
+    def mails_for(self, peer_id: str) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, peer_id, blob FROM mailbox"
+                " WHERE peer_id = ? ORDER BY created_at ASC",
+                (peer_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_mail(self, entry_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM mailbox WHERE id = ?", (entry_id,))
+            self._conn.commit()
+
+    def mail_count(self) -> int:
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) AS n FROM mailbox").fetchone()
+        return int(row["n"])
 
     def close(self) -> None:
         with self._lock:

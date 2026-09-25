@@ -760,6 +760,7 @@ class MainWindow(QMainWindow):
             "left": self._on_left,
             "rooms": self._on_rooms,
             "room-activity": self._on_room_activity,
+            "mail-received": self._on_mail_received,
             "members": self._on_members,
             "history": self._on_history,
             "message": self._on_message,
@@ -840,6 +841,13 @@ class MainWindow(QMainWindow):
                 self._notify(t("tray.new_message_room", pseudo=pseudo, room=title), body[:180])
             else:
                 self._notify(t("tray.new_message", pseudo=pseudo), body[:180])
+
+    def _on_mail_received(self, payload: object) -> None:
+        data = payload or {}
+        self._notify(
+            t("tray.new_dm", pseudo=data.get("pseudo", "")),
+            str((data.get("entry") or {}).get("body", ""))[:180],
+        )
 
     def _on_members(self, payload: object) -> None:
         members = payload or []

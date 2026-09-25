@@ -126,6 +126,7 @@ STRINGS: dict[str, str] = {
     "tray.still_running": "Ruche continue de tourner en arrière-plan pour recevoir les messages.",
     "tray.new_message": "Nouveau message de {pseudo}",
     "tray.new_message_room": "{pseudo} dans « {room} »",
+    "tray.new_dm": "Nouveau message privé de {pseudo}",
     "settings.autostart": "Lancer Ruche au démarrage de Windows",
     "settings.autostart_hint": "Ruche démarre réduit en zone de notification et vous prévient des nouveaux messages.",
     "settings.theme": "Thème",

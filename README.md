@@ -26,6 +26,7 @@ automatiquement** vers un autre participant si l'hôte se déconnecte.
 | **Édition / suppression / réactions** (opérations signées) | ✅ |
 | **Vignettes** des images reçues | ✅ |
 | **Reprise des transferts** interrompus | ✅ |
+| **Boîte aux lettres chiffrée** (livraison différée des MP) | ✅ |
 | Appels audio/vidéo de groupe | ✅ |
 | Partage d'écran | ✅ |
 | Découverte locale mDNS (sans serveur) | ✅ |
@@ -157,6 +158,10 @@ $env:RUCHE_DATA_DIR="$env:TEMP\ruche-bob";   .\.venv\Scripts\python.exe run.py
   **réagir**. L'édition et la suppression ne concernent que vos propres
   messages, et restent des **opérations signées** : rien n'est réécrit en
   douce, l'entrée d'origine est conservée dans le journal.
+- **Hors ligne** : si le correspondant n'est pas connecté, le message privé est
+  **chiffré** (X25519 + ChaCha20-Poly1305) et mis en attente. Il lui est remis
+  automatiquement dès qu'un lien vers lui s'ouvre — même s'il n'a pas encore
+  rouvert la conversation — puis effacé sur **accusé de réception**.
 
 ### Appels
 
@@ -238,6 +243,7 @@ docker compose -f deploy/docker-compose.yml up -d
 .\.venv\Scripts\python.exe tools\crypto_test.py  # signature et chiffrement de bout en bout
 .\.venv\Scripts\python.exe tools\signed_history_test.py  # journal signé (authentification)
 .\.venv\Scripts\python.exe tools\messaging_test.py  # multi-salons, édition, réactions, reprise, MP
+.\.venv\Scripts\python.exe tools\offline_test.py  # boîte aux lettres chiffrée, livraison différée
 .\.venv\Scripts\python.exe tools\media_test.py   # cadence 30 fps, écran, annulation d'écho
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface, en mode hors écran
@@ -253,8 +259,9 @@ app/
   config.py                 paramètres et chemins
   i18n.py                   chaînes de l'interface (français)
   core/
-    identity.py             identité locale (clé + pseudo)
-    storage.py              stockage SQLite (messages, fichiers, salons)
+    identity.py             identité locale (clé de signature + clé de chiffrement)
+    storage.py              stockage SQLite (messages, fichiers, salons, boîte aux lettres)
+    crypto.py               signature Ed25519 + scellement X25519 (boîte aux lettres)
     history.py              journal répliqué (Lamport) + édition/réactions
     files.py                magasin de fichiers (SHA-256), vignettes, reprise
     media.py                caméra, micro, haut-parleur
@@ -290,7 +297,7 @@ ruche.spec / build.ps1      empaquetage PyInstaller
 ## État du développement (v1.0.0 en cours)
 
 Objectif : **une seule version 1.0.0** regroupant 22 fonctionnalités, puis publication.
-Avancement : **4 chantiers sur 6 terminés**.
+Avancement : **5 chantiers sur 6 terminés**.
 
 | Chantier | Contenu | État |
 |---|---|---|
@@ -298,7 +305,7 @@ Avancement : **4 chantiers sur 6 terminés**.
 | **2 · Présence** | Notifications système · zone de notification · démarrage auto Windows · reconnexion automatique · thème clair/sombre · relais TURN en interface · écran d'accueil | ✅ **7/8** (reste l'indicateur de frappe et les accusés de réception) |
 | **3 · Appels** | 30 fps réels · profils de qualité · choix de l'écran · annulation d'écho + réduction de bruit | ✅ **terminé** |
 | **4 · Messagerie** | Multi-salons (barre latérale) · messages privés persistants · édition/suppression/réactions · vignettes · reprise des transferts | ✅ **terminé** |
-| **5 · Hors ligne** | Boîte aux lettres chiffrée, livraison différée | ⏳ **à faire** |
+| **5 · Hors ligne** | Boîte aux lettres chiffrée, livraison différée | ✅ **terminé** |
 | **6 · Distribution** | Purge du cache avec sélection · mise à jour par bouton · signature SignPath | ⏳ **à faire** |
 
 ### Notes de reprise
@@ -314,9 +321,13 @@ Avancement : **4 chantiers sur 6 terminés**.
 - Un **message privé** est un salon à deux dont le code dérive des deux
   identités (`dm:<id>:<id>`) : il réutilise toute la mécanique (historique
   signé, réplication, reconnexion) et persiste localement.
+- La **boîte aux lettres** scelle les MP destinés à un pair hors ligne avec une
+  clé X25519 (échange éphémère + ChaCha20-Poly1305) ; ils sont remis dès qu'un
+  lien vers ce pair s'ouvre, puis supprimés sur accusé de réception. Le chat en
+  direct, lui, n'est pas chiffré de bout en bout (choix conservé).
 - Les **prototypes de dérisquage** sont conservés : `tools/aec_poc.py`
   (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
-- La suite de tests compte **97 vérifications**, toutes vertes.
+- La suite de tests compte **114 vérifications**, toutes vertes.
 
 ## Empaqueter l'application
 
