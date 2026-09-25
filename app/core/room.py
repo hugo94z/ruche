@@ -61,6 +61,7 @@ class RoomManager:
         self._muted: set[str] = set()
         self._rate: dict[str, list[float]] = {}
         self._rate_warned: set[str] = set()
+        self._retries: dict[str, int] = {}
 
         # Appels
         self.call_active = False
@@ -194,6 +195,7 @@ class RoomManager:
         self.room = None
         self._rate.clear()
         self._rate_warned.clear()
+        self._retries.clear()
         self._emit("left", None)
 
     # --- Découverte : rappels du rendez-vous -----------------------------
@@ -352,6 +354,7 @@ class RoomManager:
 
     # --- Maillage : rappels ----------------------------------------------
     def _on_link_open(self, peer_id: str) -> None:
+        self._retries.pop(peer_id, None)  # connexion rétablie
         if self._loop is not None:
             self._loop.create_task(self._send_hello_and_sync(peer_id))
             if self.call_active:
@@ -359,10 +362,29 @@ class RoomManager:
                 if link is not None:
                     self._loop.create_task(self._sync_media_to_link(link))
 
+    async def _retry_link(self, peer_id: str) -> None:
+        """Reconnecte un pair toujours présent mais dont le lien a échoué.
+
+        Délai exponentiel (2 s, 4 s, 8 s… plafonné à 30 s) pour ne pas
+        marteler le réseau.
+        """
+        attempt = self._retries.get(peer_id, 0) + 1
+        self._retries[peer_id] = attempt
+        delay = min(2 ** attempt, 30)
+        await asyncio.sleep(delay)
+        if self.room is None or peer_id not in self.members:
+            self._retries.pop(peer_id, None)
+            return
+        if self.transport.links.get(peer_id) is not None:
+            return
+        await self.transport.add_peer(peer_id, self.members.get(peer_id, ""))
+
     def _on_link_closed(self, peer_id: str) -> None:
         pseudo = self.members.get(peer_id)
         if pseudo:
-            self._emit("status", f"connexion directe perdue avec {pseudo}")
+            self._emit("status", f"connexion directe perdue avec {pseudo} — reconnexion…")
+        if pseudo and self._loop is not None:
+            self._loop.create_task(self._retry_link(peer_id))
 
     async def _send_hello_and_sync(self, peer_id: str) -> None:
         await self.transport.send_to(
