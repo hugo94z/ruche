@@ -56,7 +56,6 @@ class RoomManager:
         self.room: str | None = None
         self.host_id: str | None = None
         # Confiance et modération
-        self.room_key = None
         self._trust: dict[str, dict] = {}
         self._blocked: set[str] = set()
         self._muted: set[str] = set()
@@ -120,7 +119,6 @@ class RoomManager:
         pseudo: str,
         rendezvous_url: str = "",
         use_lan: bool = True,
-        password: str = "",
     ) -> None:
         self._loop = asyncio.get_running_loop()
         self.room = room
@@ -128,11 +126,7 @@ class RoomManager:
         save_identity(self.identity)
         self.transport.configure(self.identity.peer_id, pseudo)
 
-        # Chiffrement de bout en bout si un mot de passe est fourni.
-        self.room_key = crypto.derive_room_key(password, room) if password else None
-        self.history.configure(
-            self.identity.private_key, self.identity.public_key, self.room_key
-        )
+        self.history.configure(self.identity.private_key, self.identity.public_key)
         self._load_trust()
 
         self.members = {self.identity.peer_id: pseudo}
@@ -198,7 +192,6 @@ class RoomManager:
         self.members = {}
         self.host_id = None
         self.room = None
-        self.room_key = None
         self._rate.clear()
         self._rate_warned.clear()
         self._emit("left", None)
@@ -301,9 +294,6 @@ class RoomManager:
         row = self._trust.get(peer_id)
         key = (row or {}).get("public_key") or ""
         return crypto.fingerprint(key) if key else None
-
-    def room_password_hint(self, password: str) -> str:
-        return crypto.password_hint(password, self.room or "")
 
     def _remove_member(self, peer_id: str, source: str = "rv") -> None:
         sources = self._member_sources.get(peer_id)

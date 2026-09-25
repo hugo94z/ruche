@@ -207,13 +207,6 @@ class MainWindow(QMainWindow):
         self.call_button.setEnabled(False)
         bar.addWidget(self.call_button)
 
-        bar.addWidget(QLabel(t("connect.password")))
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setPlaceholderText(t("connect.password.placeholder"))
-        self.password_input.setFixedWidth(130)
-        bar.addWidget(self.password_input)
-
         self.devices_button = QPushButton(t("call.settings"))
         self.devices_button.clicked.connect(self._open_devices)
         bar.addWidget(self.devices_button)
@@ -298,11 +291,7 @@ class MainWindow(QMainWindow):
             self._new_room()
             room = self.room_input.text().strip().upper()
         self._rendezvous_url = self.rendezvous_input.text().strip()
-        asyncio.ensure_future(
-            self.manager.join(
-                room, pseudo, self._rendezvous_url, True, self.password_input.text()
-            )
-        )
+        asyncio.ensure_future(self.manager.join(room, pseudo, self._rendezvous_url))
 
     async def _leave(self) -> None:
         await self.manager.leave()
@@ -613,7 +602,6 @@ class MainWindow(QMainWindow):
         self.pseudo_input.setEnabled(False)
         self.room_input.setEnabled(False)
         self.rendezvous_input.setEnabled(False)
-        self.password_input.setEnabled(False)
         self.new_room_button.setEnabled(False)
         self.join_button.setText(t("connect.leave"))
         self.message_input.setEnabled(True)
@@ -628,7 +616,6 @@ class MainWindow(QMainWindow):
         self.pseudo_input.setEnabled(True)
         self.room_input.setEnabled(True)
         self.rendezvous_input.setEnabled(True)
-        self.password_input.setEnabled(True)
         self.new_room_button.setEnabled(True)
         self.join_button.setText(t("connect.join"))
         self.message_input.setEnabled(False)
