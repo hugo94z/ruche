@@ -42,6 +42,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
     app.setApplicationDisplayName(config.APP_NAME)
+    app.setApplicationVersion(config.APP_VERSION)
     # Sans cela, fermer la fenêtre quitterait l'application au lieu de la
     # réduire en zone de notification.
     app.setQuitOnLastWindowClosed(False)

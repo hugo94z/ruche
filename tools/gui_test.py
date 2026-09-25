@@ -99,6 +99,11 @@ def main() -> int:
         except ImportError:
             checks.append(("Pillow disponible", False))
 
+        checks.append(("Bouton cache présent", "Cache" in window.cache_button.text()))
+        checks.append(
+            ("Fichiers listés dans le cache", len(manager.files.cached_files()) >= 1)
+        )
+
         # Message privé : une session distincte apparaît dans la barre latérale.
         peer = "0123456789abcdef"
         await manager.start_dm(peer, "Bob")

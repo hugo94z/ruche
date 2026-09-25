@@ -129,6 +129,15 @@ Bouton **Périphériques** (fenêtre principale) : caméra, micro, haut-parleur.
 - Si le correspondant n'est jamais revenu, le message reste en attente : il n'y
   a **pas de serveur** pour le garder à votre place.
 
+### 3.9 Cache et mises à jour
+
+- Bouton **Cache…** : cochez les fichiers à supprimer (images, vidéos reçues)
+  pour libérer de l'espace ; **Nettoyer les transferts inachevés** efface les
+  réceptions interrompues.
+- **Vérifier les mises à jour** (clic droit sur l'icône de la zone de
+  notification) : Ruche compare sa version à la dernière publiée et propose
+  d'ouvrir la page de téléchargement le cas échéant.
+
 ---
 
 ## 4. Les trois façons de se connecter
@@ -251,6 +260,7 @@ Résultat : `dist\Ruche\Ruche.exe`
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\messaging_test.py  # multi-salons, édition, réactions, reprise, MP
 .\.venv\Scripts\python.exe tools\offline_test.py  # boîte aux lettres chiffrée, livraison différée
+.\.venv\Scripts\python.exe tools\distribution_test.py  # purge du cache, mises à jour
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface hors écran
 ```
 
@@ -296,6 +306,7 @@ app/
     history.py              journal répliqué (+ édition/réactions)
     files.py                magasin de fichiers, vignettes, reprise
     media.py                caméra, micro, haut-parleur, écran
+    update.py               vérification des mises à jour
     room.py                 hub multi-salons (RoomSession + RoomManager)
     network/
       rendezvous.py         client du serveur de rendez-vous

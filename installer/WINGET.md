@@ -263,3 +263,53 @@ mais il est recommandé d'utiliser pour cette tâche un **jeton à portée
 restreinte** (`repo`, `workflow`) et de le révoquer une fois la publication
 terminée.
 
+---
+
+## 11. Signature de code avec SignPath
+
+La **signature Authenticode** supprime l'avertissement SmartScreen et affiche
+Ruche comme éditeur de confiance. Le projet est préparé pour
+[**SignPath Foundation**](https://signpath.org/) (gratuit pour l'open source),
+mais l'activation demande un compte et des secrets : **tant qu'ils ne sont pas
+configurés, les releases restent non signées et le pipeline fonctionne
+normalement.**
+
+### Activer la signature
+
+1. Créer un compte sur <https://signpath.io> et demander le programme
+   **Foundation** (projet open source).
+2. Dans SignPath, créer le **projet** et la **politique de signature**, puis
+   une **configuration d'artefact** dont la racine est un `<zip-file>` (le
+   fichier est téléversé via `actions/upload-artifact`, donc zippé).
+3. Dans le dépôt GitHub, ajouter :
+
+   | Type | Nom | Valeur |
+   |---|---|---|
+   | Secret | `SIGNPATH_API_TOKEN` | jeton d'API SignPath (droits « submitter ») |
+   | Secret | `SIGNPATH_ORG_ID` | identifiant de l'organisation SignPath |
+   | Variable | `SIGNPATH_PROJECT_SLUG` | *slug* du projet |
+   | Variable | `SIGNPATH_POLICY_SLUG` | *slug* de la politique de signature |
+
+4. Installer l'**application GitHub SignPath** (<https://github.com/apps/signpath>)
+   sur le dépôt (requis pour l'évaluation des politiques).
+
+Au prochain tag `vX.Y.Z`, le workflow :
+
+- téléverse l'installateur non signé comme artefact GitHub ;
+- soumet une demande de signature à SignPath et attend le résultat ;
+- **remplace** l'installateur par la version signée **avant** de calculer
+  l'empreinte SHA-256 des manifestes winget et de publier la release.
+
+> ⚠️ L'empreinte du manifeste winget doit correspondre à l'installateur
+> **signé** : c'est pourquoi la signature intervient *avant* la génération des
+> manifestes. Ne jamais signer après coup un binaire déjà publié.
+
+Vérification manuelle d'un installateur signé :
+
+```powershell
+Get-AuthenticodeSignature .\installer\Output\Ruche-Setup-1.0.0.exe |
+    Format-List Status, SignerCertificate
+```
+
+`Status` doit valoir `Valid`.
+

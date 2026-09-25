@@ -115,6 +115,27 @@ STRINGS: dict[str, str] = {
     "host.stopped": "Hébergement arrêté",
     "host.failed": "Impossible de démarrer l'hébergement : {error}",
 
+    # Cache et mises à jour
+    "cache.button": "Cache…",
+    "cache.title": "Cache des fichiers",
+    "cache.intro": "Cochez les fichiers à supprimer. Ils pourront être retéléchargés depuis un pair qui les possède encore.",
+    "cache.empty": "Aucun fichier en cache.",
+    "cache.select_all": "Tout sélectionner",
+    "cache.delete": "Supprimer la sélection",
+    "cache.partials": "Nettoyer les transferts inachevés",
+    "cache.deleted": "{count} fichier(s) supprimé(s) — {size} libérés",
+    "cache.partials_done": "{count} transfert(s) inachevé(s) nettoyé(s)",
+    "cache.total": "Total en cache : {size}",
+    "cache.column": "{name}  ({size})",
+    "update.button": "Vérifier les mises à jour",
+    "update.checking": "Recherche d'une mise à jour…",
+    "update.uptodate": "Ruche est à jour (version {version}).",
+    "update.available": "Une nouvelle version est disponible : {version} (vous avez {current}).",
+    "update.failed": "Impossible de vérifier les mises à jour (hors ligne ?).",
+    "update.open": "Ouvrir la page de téléchargement",
+    "update.later": "Plus tard",
+    "update.version_title": "Mise à jour",
+
     # Divers
     "misc.copy": "Copier",
     "misc.copied": "Copié",

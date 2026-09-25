@@ -19,6 +19,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
 
+    # Renseigne SIGNPATH_API_TOKEN pour activer la signature de code.
+    # Sans ce secret, les etapes de signature sont ignorees (release non signee).
+    env:
+      SIGNPATH_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +60,38 @@ jobs:
           choco install innosetup --no-progress -y
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ruche.iss `
               /DAppVersion=${{ steps.version.outputs.value }} /DPublisher=Ruche
+
+      - name: Televerser l'installateur non signe (pour signature)
+        if: env.SIGNPATH_TOKEN != ''
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruche-unsigned-installer
+          path: installer/Output/Ruche-Setup-${{ steps.version.outputs.value }}.exe
+
+      - name: Signer l'installateur (SignPath)
+        if: env.SIGNPATH_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Remplacer par l'installateur signe
+        if: env.SIGNPATH_TOKEN != ''
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem -Recurse signed -Filter "Ruche-Setup-*.exe" | Select-Object -First 1
+          if (-not $signed) { throw "Installateur signe introuvable" }
+          Copy-Item $signed.FullName `
+              "installer\Output\Ruche-Setup-${{ steps.version.outputs.value }}.exe" -Force
+          Get-AuthenticodeSignature `
+              "installer\Output\Ruche-Setup-${{ steps.version.outputs.value }}.exe" |
+              Format-List Status, SignerCertificate
 
       - name: Generer les manifestes winget
         shell: pwsh

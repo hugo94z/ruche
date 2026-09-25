@@ -16,7 +16,17 @@ import sys
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QCursor,
+    QDesktopServices,
+    QFont,
+    QGuiApplication,
+    QIcon,
+    QPainter,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QComboBox,
     QCheckBox,
@@ -42,6 +52,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..core import autostart
+from ..core import update
 from ..core.hosting import RendezvousHost
 from ..core.media import VIDEO_PROFILES, list_audio_devices, list_cameras, list_monitors
 from ..core.room import RoomManager
@@ -175,6 +186,10 @@ class MainWindow(QMainWindow):
         tray.setToolTip(config.APP_NAME)
         menu = QMenu()
         menu.addAction(t("tray.open"), self._restore_window)
+        menu.addSeparator()
+        menu.addAction(t("cache.button"), self._open_cache_dialog)
+        menu.addAction(t("update.button"), self._check_updates)
+        menu.addSeparator()
         menu.addAction(t("tray.quit"), self._quit_application)
         tray.setContextMenu(menu)
         tray.activated.connect(
@@ -253,6 +268,10 @@ class MainWindow(QMainWindow):
         self.devices_button = QPushButton(t("call.settings"))
         self.devices_button.clicked.connect(self._open_devices)
         bar.addWidget(self.devices_button)
+
+        self.cache_button = QPushButton(t("cache.button"))
+        self.cache_button.clicked.connect(self._open_cache_dialog)
+        bar.addWidget(self.cache_button)
         layout.addLayout(bar)
 
         # Barre du rendez-vous
@@ -665,6 +684,112 @@ class MainWindow(QMainWindow):
             app = QGuiApplication.instance()
             if app is not None:
                 apply_theme(app, chosen)
+
+    # --- Cache et mises à jour -------------------------------------------
+    def _open_cache_dialog(self) -> None:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(t("cache.title"))
+        dialog.resize(560, 420)
+        layout = QVBoxLayout(dialog)
+
+        intro = QLabel(t("cache.intro"))
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        total_label = QLabel()
+        layout.addWidget(total_label)
+
+        listing = QListWidget()
+        layout.addWidget(listing, 1)
+
+        def refresh() -> None:
+            listing.clear()
+            rows = self.manager.files.cached_files()
+            for row in rows:
+                label = t(
+                    "cache.column",
+                    name=row.get("name", "fichier"),
+                    size=_human_size(int(row.get("size", 0) or 0)),
+                )
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, row["id"])
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Unchecked)
+                listing.addItem(item)
+            total_label.setText(
+                t("cache.total", size=_human_size(self.manager.files.cache_size()))
+            )
+            if not rows:
+                listing.addItem(QListWidgetItem(t("cache.empty")))
+
+        def select_all() -> None:
+            for index in range(listing.count()):
+                item = listing.item(index)
+                if item.data(Qt.UserRole):
+                    item.setCheckState(Qt.Checked)
+
+        def delete_selected() -> None:
+            ids = [
+                listing.item(index).data(Qt.UserRole)
+                for index in range(listing.count())
+                if listing.item(index).data(Qt.UserRole)
+                and listing.item(index).checkState() == Qt.Checked
+            ]
+            if not ids:
+                return
+            count, freed = self.manager.files.purge(ids)
+            self.statusBar().showMessage(
+                t("cache.deleted", count=count, size=_human_size(freed))
+            )
+            refresh()
+            self._rerender()
+
+        def clean_partials() -> None:
+            removed = self.manager.files.purge_partials()
+            self.statusBar().showMessage(t("cache.partials_done", count=removed))
+
+        buttons = QDialogButtonBox()
+        select_button = buttons.addButton(t("cache.select_all"), QDialogButtonBox.ActionRole)
+        delete_button = buttons.addButton(t("cache.delete"), QDialogButtonBox.DestructiveRole)
+        partials_button = buttons.addButton(t("cache.partials"), QDialogButtonBox.ActionRole)
+        buttons.addButton(t("host.close"), QDialogButtonBox.RejectRole)
+        layout.addWidget(buttons)
+        select_button.clicked.connect(select_all)
+        delete_button.clicked.connect(delete_selected)
+        partials_button.clicked.connect(clean_partials)
+
+        refresh()
+        dialog.exec()
+
+    def _check_updates(self) -> None:
+        asyncio.ensure_future(self._run_update_check())
+
+    async def _run_update_check(self) -> None:
+        self.statusBar().showMessage(t("update.checking"))
+        info = await update.latest_release()
+        if info is None:
+            QMessageBox.information(
+                self, t("update.version_title"), t("update.failed")
+            )
+            return
+        current = config.APP_VERSION
+        if update.is_newer(info["version"], current):
+            box = QMessageBox(self)
+            box.setWindowTitle(t("update.version_title"))
+            box.setText(
+                t("update.available", version=info["version"], current=current)
+            )
+            open_button = box.addButton(t("update.open"), QMessageBox.AcceptRole)
+            box.addButton(t("update.later"), QMessageBox.RejectRole)
+            box.exec()
+            if box.clickedButton() is open_button:
+                QDesktopServices.openUrl(QUrl(info["url"]))
+        else:
+            QMessageBox.information(
+                self,
+                t("update.version_title"),
+                t("update.uptodate", version=current),
+            )
 
     # --- Appels -----------------------------------------------------------
     def _ensure_call_window(self) -> CallWindow:

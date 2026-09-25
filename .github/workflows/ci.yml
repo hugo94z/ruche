@@ -67,6 +67,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\offline_test.py
 
+      - name: Distribution (purge du cache, mises a jour)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\distribution_test.py
+
       - name: Media (cadence 30 fps, ecran, annulation d'echo)
         shell: pwsh
         env:

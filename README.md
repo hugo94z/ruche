@@ -27,6 +27,8 @@ automatiquement** vers un autre participant si l'hôte se déconnecte.
 | **Vignettes** des images reçues | ✅ |
 | **Reprise des transferts** interrompus | ✅ |
 | **Boîte aux lettres chiffrée** (livraison différée des MP) | ✅ |
+| **Purge du cache** avec sélection | ✅ |
+| **Mise à jour** par bouton | ✅ |
 | Appels audio/vidéo de groupe | ✅ |
 | Partage d'écran | ✅ |
 | Découverte locale mDNS (sans serveur) | ✅ |
@@ -223,6 +225,16 @@ Un serveur de rendez-vous + TURN « clé en main » est fourni :
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
+### Cache et mises à jour
+
+- Le bouton **Cache…** liste les fichiers reçus (nom, taille) et permet d'en
+  **supprimer une sélection** pour libérer de l'espace ; les transferts
+  inachevés se nettoient d'un clic.
+- **Vérifier les mises à jour** (menu de la zone de notification) interroge la
+  dernière version publiée et propose d'ouvrir la page de téléchargement si une
+  version plus récente existe.
+- Les releases peuvent être **signées** (SignPath) : voir `installer/WINGET.md`.
+
 ### Limites connues
 
 - Derrière un **NAT symétrique**, une connexion directe peut échouer : configurez
@@ -244,6 +256,7 @@ docker compose -f deploy/docker-compose.yml up -d
 .\.venv\Scripts\python.exe tools\signed_history_test.py  # journal signé (authentification)
 .\.venv\Scripts\python.exe tools\messaging_test.py  # multi-salons, édition, réactions, reprise, MP
 .\.venv\Scripts\python.exe tools\offline_test.py  # boîte aux lettres chiffrée, livraison différée
+.\.venv\Scripts\python.exe tools\distribution_test.py  # purge du cache, mises à jour
 .\.venv\Scripts\python.exe tools\media_test.py   # cadence 30 fps, écran, annulation d'écho
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface, en mode hors écran
@@ -266,6 +279,7 @@ app/
     files.py                magasin de fichiers (SHA-256), vignettes, reprise
     media.py                caméra, micro, haut-parleur
     hosting.py              hébergement d'un rendez-vous depuis l'application
+    update.py               vérification des mises à jour (API GitHub)
     room.py                 hub multi-salons : RoomSession (salon) + RoomManager
     network/
       rendezvous.py         client du serveur de rendez-vous
@@ -297,7 +311,7 @@ ruche.spec / build.ps1      empaquetage PyInstaller
 ## État du développement (v1.0.0 en cours)
 
 Objectif : **une seule version 1.0.0** regroupant 22 fonctionnalités, puis publication.
-Avancement : **5 chantiers sur 6 terminés**.
+Avancement : **6 chantiers sur 6 terminés**.
 
 | Chantier | Contenu | État |
 |---|---|---|
@@ -306,7 +320,7 @@ Avancement : **5 chantiers sur 6 terminés**.
 | **3 · Appels** | 30 fps réels · profils de qualité · choix de l'écran · annulation d'écho + réduction de bruit | ✅ **terminé** |
 | **4 · Messagerie** | Multi-salons (barre latérale) · messages privés persistants · édition/suppression/réactions · vignettes · reprise des transferts | ✅ **terminé** |
 | **5 · Hors ligne** | Boîte aux lettres chiffrée, livraison différée | ✅ **terminé** |
-| **6 · Distribution** | Purge du cache avec sélection · mise à jour par bouton · signature SignPath | ⏳ **à faire** |
+| **6 · Distribution** | Purge du cache avec sélection · mise à jour par bouton · signature SignPath | ✅ **2/3** (la signature SignPath attend les secrets du compte) |
 
 ### Notes de reprise
 
@@ -325,9 +339,16 @@ Avancement : **5 chantiers sur 6 terminés**.
   clé X25519 (échange éphémère + ChaCha20-Poly1305) ; ils sont remis dès qu'un
   lien vers ce pair s'ouvre, puis supprimés sur accusé de réception. Le chat en
   direct, lui, n'est pas chiffré de bout en bout (choix conservé).
+- La **purge du cache** liste les fichiers connus (taille, vignette) et supprime
+  la sélection du disque et de la base ; les transferts inachevés se nettoient
+  aussi. La **mise à jour par bouton** interroge l'API GitHub et ouvre la page
+  de téléchargement si une version plus récente existe.
+- La **signature SignPath** est câblée dans `release.yml`, conditionnée à
+  `SIGNPATH_API_TOKEN` : sans ce secret, les releases restent non signées. Voir
+  `installer/WINGET.md` §11.
 - Les **prototypes de dérisquage** sont conservés : `tools/aec_poc.py`
   (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
-- La suite de tests compte **114 vérifications**, toutes vertes.
+- La suite de tests compte **135 vérifications**, toutes vertes.
 
 ## Empaqueter l'application
 

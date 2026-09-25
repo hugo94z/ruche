@@ -172,6 +172,19 @@ class Storage:
             )
             self._conn.commit()
 
+    def all_files(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, name, size, mime, sha256, path, added_at FROM files"
+                " ORDER BY added_at DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def delete_file(self, file_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
+            self._conn.commit()
+
     # --- Pairs de confiance ----------------------------------------------
     def remember_peer(
         self, peer_id: str, public_key: str, pseudo: str, enc_key: str = ""

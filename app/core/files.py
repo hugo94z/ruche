@@ -101,6 +101,73 @@ class FileStore:
             return None
         return thumb
 
+    # --- Cache : consultation et purge -----------------------------------
+    def cached_files(self) -> list[dict]:
+        """Fichiers connus, avec leur état sur le disque."""
+        rows = []
+        for row in self.storage.all_files():
+            path = Path(row["path"]) if row.get("path") else None
+            present = bool(path and path.exists())
+            size = int(row.get("size", 0) or 0)
+            if present:
+                try:
+                    size = path.stat().st_size
+                except OSError:
+                    present = False
+            row = dict(row)
+            row["present"] = present
+            row["size"] = size
+            row["has_thumbnail"] = bool(
+                present and list(self.dir.glob(f".thumb-{row['id'][:32]}-*.jpg"))
+            )
+            rows.append(row)
+        return rows
+
+    def cache_size(self) -> int:
+        return sum(int(r.get("size", 0) or 0) for r in self.cached_files() if r["present"])
+
+    def purge(self, file_ids: list[str]) -> tuple[int, int]:
+        """Supprime des fichiers du cache (disque + base + vignettes).
+
+        Renvoie ``(nombre, octets libérés)``. Les fichiers absents du disque
+        sont tout de même retirés de la base.
+        """
+        count = 0
+        freed = 0
+        for file_id in file_ids:
+            if not file_id:
+                continue
+            record = self.get(file_id)
+            if record is not None and record.path:
+                path = Path(record.path)
+                try:
+                    if path.exists():
+                        freed += path.stat().st_size
+                        path.unlink()
+                except OSError:
+                    pass
+            for thumb in self.dir.glob(f".thumb-{file_id[:32]}-*.jpg"):
+                try:
+                    thumb.unlink()
+                except OSError:
+                    pass
+            self.abort(file_id)
+            self.storage.delete_file(file_id)
+            count += 1
+        return count, freed
+
+    def purge_partials(self) -> int:
+        """Supprime les transferts inachevés (``.part-*``)."""
+        removed = 0
+        for partial in self.dir.glob(".part-*"):
+            try:
+                partial.unlink()
+                removed += 1
+            except OSError:
+                pass
+        self._incoming.clear()
+        return removed
+
     # --- Préparation d'un envoi ------------------------------------------
     def prepare(self, source: Path) -> FileRecord:
         source = Path(source)
