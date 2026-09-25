@@ -46,6 +46,7 @@ from ..core.media import VIDEO_PROFILES, list_audio_devices, list_cameras, list_
 from ..core.room import RoomManager
 from ..i18n import t
 from .call_window import CallWindow
+from .theme import apply as apply_theme
 
 _ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 # Couleurs stables par pseudo (dérivées du nom).
@@ -463,6 +464,43 @@ class MainWindow(QMainWindow):
         layout.addWidget(autostart_box)
         layout.addWidget(hint)
 
+        # Thème
+        theme_box = QComboBox()
+        theme_box.addItem("Clair", "clair")
+        theme_box.addItem("Sombre", "sombre")
+        settings = config.load_settings()
+        theme_box.setCurrentIndex(1 if settings.get("theme") == "sombre" else 0)
+        row_theme = QHBoxLayout()
+        row_theme.addWidget(QLabel(t("settings.theme")))
+        row_theme.addWidget(theme_box, 1)
+        layout.addLayout(row_theme)
+
+        # Relais TURN
+        turn_url = QLineEdit()
+        turn_user = QLineEdit()
+        turn_pass = QLineEdit()
+        turn_pass.setEchoMode(QLineEdit.Password)
+        for server in config.ice_servers():
+            urls = server.get("urls") or ""
+            if isinstance(urls, str) and urls.startswith("turn"):
+                turn_url.setText(urls)
+                turn_user.setText(server.get("username", ""))
+                turn_pass.setText(server.get("credential", ""))
+        turn_hint = QLabel(t("settings.turn_hint"))
+        turn_hint.setWordWrap(True)
+        turn_hint.setStyleSheet("color:#666;")
+        layout.addWidget(QLabel(t("settings.turn")))
+        for label, widget in (
+            (t("settings.turn_url"), turn_url),
+            (t("settings.turn_user"), turn_user),
+            (t("settings.turn_pass"), turn_pass),
+        ):
+            row_turn = QHBoxLayout()
+            row_turn.addWidget(QLabel(label))
+            row_turn.addWidget(widget, 1)
+            layout.addLayout(row_turn)
+        layout.addWidget(turn_hint)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -480,6 +518,27 @@ class MainWindow(QMainWindow):
                 monitor_box.currentData(),
             )
             autostart.set_enabled(autostart_box.isChecked())
+
+            # Enregistrer les serveurs ICE (STUN par défaut + TURN si rempli).
+            servers = [{"urls": url} for url in config.STUN_SERVERS]
+            url = turn_url.text().strip()
+            if url:
+                entry = {"urls": url}
+                if turn_user.text().strip():
+                    entry["username"] = turn_user.text().strip()
+                if turn_pass.text():
+                    entry["credential"] = turn_pass.text()
+                servers.append(entry)
+            config.write_ice_servers(servers)
+
+            # Thème appliqué immédiatement.
+            chosen = theme_box.currentData()
+            settings = config.load_settings()
+            settings["theme"] = chosen
+            config.save_settings(settings)
+            app = QGuiApplication.instance()
+            if app is not None:
+                apply_theme(app, chosen)
 
     # --- Appels -----------------------------------------------------------
     def _ensure_call_window(self) -> CallWindow:

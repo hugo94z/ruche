@@ -23,6 +23,7 @@ from .core.identity import load_or_create
 from .core.room import RoomManager
 from .core.storage import Storage
 from .ui.main_window import MainWindow
+from .ui.theme import apply as apply_theme
 
 
 def _configure_logging() -> None:
@@ -44,6 +45,8 @@ def main() -> int:
     # Sans cela, fermer la fenêtre quitterait l'application au lieu de la
     # réduire en zone de notification.
     app.setQuitOnLastWindowClosed(False)
+    # Thème enregistré dans les réglages.
+    apply_theme(app, config.load_settings().get("theme", "clair"))
 
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)

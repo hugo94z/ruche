@@ -107,6 +107,12 @@ STRINGS: dict[str, str] = {
     "tray.new_message": "Nouveau message de {pseudo}",
     "settings.autostart": "Lancer Ruche au démarrage de Windows",
     "settings.autostart_hint": "Ruche démarre réduit en zone de notification et vous prévient des nouveaux messages.",
+    "settings.theme": "Thème",
+    "settings.turn": "Relais TURN (optionnel)",
+    "settings.turn_hint": "Pour les réseaux qui bloquent le pair-à-pair. Exemple : turn:mon-ip:3478",
+    "settings.turn_url": "Adresse TURN",
+    "settings.turn_user": "Utilisateur",
+    "settings.turn_pass": "Mot de passe",
 }
 
 

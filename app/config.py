@@ -60,6 +60,36 @@ def identity_path() -> Path:
     return data_dir() / "identity.json"
 
 
+def settings_path() -> Path:
+    return data_dir() / "settings.json"
+
+
+def load_settings() -> dict:
+    path = settings_path()
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (ValueError, OSError):
+            return {}
+    return {}
+
+
+def save_settings(data: dict) -> None:
+    try:
+        settings_path().write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
+def write_ice_servers(servers: list[dict]) -> None:
+    """Enregistre les serveurs ICE choisis dans l'interface."""
+    path = data_dir() / "ice_servers.json"
+    path.write_text(json.dumps(servers, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def ice_servers() -> list[dict]:
     """Serveurs ICE pour WebRTC : STUN par défaut, TURN si configuré.
 
