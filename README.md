@@ -127,9 +127,14 @@ $env:RUCHE_DATA_DIR="$env:TEMP\ruche-bob";   .\.venv\Scripts\python.exe run.py
 - Bouton **Appeler** : un appel de groupe démarre dans le salon ; les autres
   participants reçoivent une invitation et le rejoignent s'ils le souhaitent.
 - Audio et vidéo circulent en **maillage** (chaque pair envoie aux autres).
+- **Annulation d'écho et réduction de bruit** : le micro retire ce que le
+  haut-parleur joue (mesuré à ~25 dB d'atténuation), donc plus de larsen.
+- **30 images/seconde** pour la vidéo et le partage d'écran, en option
+  (profils : basse, moyenne, haute, HD).
 - La fenêtre d'appel affiche une mosaïque et permet de **couper le micro** ou
   la **caméra**, puis de raccrocher.
-- Le bouton **Périphériques** choisit la caméra, le micro et le haut-parleur.
+- Le bouton **Périphériques** choisit la caméra, le micro, le haut-parleur, la
+  **qualité vidéo**, l'**écran à partager** et sa cadence.
   Sans caméra, une **mire de test** animée prend le relais.
 
 ### Partage d'écran
@@ -194,9 +199,14 @@ docker compose -f deploy/docker-compose.yml up -d
 .\.venv\Scripts\python.exe tools\smoke_test.py   # socle : maillage, chat, fichiers, bascule d'hôte
 .\.venv\Scripts\python.exe tools\lan_test.py     # découverte mDNS et connexion SANS serveur
 .\.venv\Scripts\python.exe tools\host_test.py    # hébergement d'un rendez-vous en un clic
+.\.venv\Scripts\python.exe tools\crypto_test.py  # signature et chiffrement de bout en bout
+.\.venv\Scripts\python.exe tools\media_test.py   # cadence 30 fps, écran, annulation d'écho
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface, en mode hors écran
 ```
+
+Les deux prototypes de dérisquage sont conservés pour référence :
+`tools/aec_poc.py` (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
 
 ## Structure du projet
 

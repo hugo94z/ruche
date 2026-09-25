@@ -19,7 +19,7 @@ from .. import config
 from .files import CHUNK_SIZE, FileStore
 from .history import HistoryLog
 from .identity import Identity, save as save_identity
-from .media import LocalMedia, SpeakerSink
+from .media import DEFAULT_PROFILE, LocalMedia, SpeakerSink
 from .network.lan import LanNetwork
 from .network.rendezvous import RendezvousClient
 from .network.transport import MeshTransport
@@ -62,6 +62,9 @@ class RoomManager:
         self._camera_device: str | None = None
         self._microphone_device: int | None = None
         self._speaker_device: int | None = None
+        self._video_profile = DEFAULT_PROFILE
+        self._screen_fps = 30
+        self._screen_monitor = 1
         self._media_factory = LocalMedia
         self._speaker_factory = SpeakerSink
 
@@ -74,10 +77,19 @@ class RoomManager:
         camera: str | None = None,
         microphone: int | None = None,
         speaker: int | None = None,
+        profile: str | None = None,
+        screen_fps: int | None = None,
+        screen_monitor: int | None = None,
     ) -> None:
         self._camera_device = camera or None
         self._microphone_device = microphone
         self._speaker_device = speaker
+        if profile:
+            self._video_profile = profile
+        if screen_fps:
+            self._screen_fps = screen_fps
+        if screen_monitor is not None:
+            self._screen_monitor = screen_monitor
 
     # --- Observateurs -----------------------------------------------------
     def add_listener(self, listener: Listener) -> None:
@@ -483,7 +495,9 @@ class RoomManager:
     def _begin_local_call(self) -> None:
         self.call_active = True
         self.call_peers = {self.identity.peer_id}
-        self._local_media = self._media_factory(self._camera_device, self._microphone_device)
+        self._local_media = self._media_factory(
+            self._camera_device, self._microphone_device, self._video_profile, self._screen_fps
+        )
         self._emit(
             "call-local-video",
             {"track": self._local_media.preview_video(), "pseudo": self.identity.pseudo},
@@ -525,11 +539,13 @@ class RoomManager:
         link.set_local_media(self._local_media.new_audio(), video)
         await link.request_media()
 
-    async def start_screen_share(self, monitor: int = 1) -> None:
+    async def start_screen_share(self, monitor: int | None = None) -> None:
         if not self.call_active or self._local_media is None or self._screen_sharing:
             return
         try:
-            preview = self._local_media.start_screen(monitor)
+            preview = self._local_media.start_screen(
+                monitor if monitor is not None else self._screen_monitor
+            )
         except Exception as exc:  # mss absent, écran inaccessible…
             self._emit("status", f"partage d'écran impossible : {exc}")
             return

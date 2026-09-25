@@ -36,6 +36,17 @@ CREATE TABLE IF NOT EXISTS files (
     path     TEXT,
     added_at REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS peers (
+    peer_id    TEXT PRIMARY KEY,
+    public_key TEXT NOT NULL DEFAULT '',
+    pseudo     TEXT NOT NULL DEFAULT '',
+    verified   INTEGER NOT NULL DEFAULT 0,
+    blocked    INTEGER NOT NULL DEFAULT 0,
+    muted      INTEGER NOT NULL DEFAULT 0,
+    first_seen REAL NOT NULL,
+    last_seen  REAL NOT NULL
+);
 """
 
 
@@ -135,6 +146,61 @@ class Storage:
             self._conn.execute(
                 "UPDATE files SET path = ? WHERE id = ?", (path, file_id)
             )
+            self._conn.commit()
+
+    # --- Pairs de confiance ----------------------------------------------
+    def remember_peer(self, peer_id: str, public_key: str, pseudo: str) -> None:
+        """Mémorise la clé publique d'un pair. Une clé déjà connue n'est
+        **jamais** remplacée : c'est ce qui permet de détecter une usurpation."""
+        now = time.time()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT public_key FROM peers WHERE peer_id = ?", (peer_id,)
+            ).fetchone()
+            if row is None:
+                self._conn.execute(
+                    "INSERT INTO peers (peer_id, public_key, pseudo, first_seen, last_seen)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (peer_id, public_key, pseudo, now, now),
+                )
+            else:
+                self._conn.execute(
+                    "UPDATE peers SET pseudo = COALESCE(NULLIF(?, ''), pseudo),"
+                    " last_seen = ? WHERE peer_id = ?",
+                    (pseudo, now, peer_id),
+                )
+            self._conn.commit()
+
+    def peer(self, peer_id: str) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT peer_id, public_key, pseudo, verified, blocked, muted"
+                " FROM peers WHERE peer_id = ?",
+                (peer_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def all_peers(self) -> list[dict]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT peer_id, public_key, pseudo, verified, blocked, muted"
+                " FROM peers ORDER BY pseudo COLLATE NOCASE"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_peer_flag(self, peer_id: str, field: str, value: bool) -> None:
+        if field not in ("verified", "blocked", "muted"):
+            raise ValueError(field)
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE peers SET {field} = ? WHERE peer_id = ?",
+                (1 if value else 0, peer_id),
+            )
+            self._conn.commit()
+
+    def forget_peer(self, peer_id: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM peers WHERE peer_id = ?", (peer_id,))
             self._conn.commit()
 
     # --- Salons -----------------------------------------------------------

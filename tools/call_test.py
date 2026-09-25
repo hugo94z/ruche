@@ -74,7 +74,7 @@ class SineAudioTrack(MediaStreamTrack):
 class FakeLocalMedia:
     """Remplace caméra + micro par une mire et un son synthétiques."""
 
-    def __init__(self, camera=None, microphone=None) -> None:
+    def __init__(self, camera=None, microphone=None, profile=None, screen_fps=None) -> None:
         self._video = TestVideoTrack()
         self._audio = SineAudioTrack()
         self._vrelay = MediaRelay()

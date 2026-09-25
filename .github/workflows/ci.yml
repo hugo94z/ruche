@@ -43,6 +43,18 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\host_test.py
 
+      - name: Cryptographie (signature et chiffrement de bout en bout)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\crypto_test.py
+
+      - name: Media (cadence 30 fps, ecran, annulation d'echo)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\media_test.py
+
       - name: Interface (hors ecran)
         shell: pwsh
         env:

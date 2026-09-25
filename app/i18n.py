@@ -52,6 +52,9 @@ STRINGS: dict[str, str] = {
     "call.speaker": "Haut-parleur",
     "call.no_camera": "Mire de test (aucune caméra)",
     "call.system_default": "Par défaut du système",
+    "call.quality": "Qualité vidéo",
+    "call.screen_fps": "Partage d'écran (images/s)",
+    "call.monitor": "Écran à partager",
 
     # Hébergement d'un rendez-vous
     "host.button": "Héberger un rendez-vous",

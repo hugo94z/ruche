@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..core.hosting import RendezvousHost
-from ..core.media import list_audio_devices, list_cameras
+from ..core.media import VIDEO_PROFILES, list_audio_devices, list_cameras, list_monitors
 from ..core.room import RoomManager
 from ..i18n import t
 from .call_window import CallWindow
@@ -364,10 +364,26 @@ class MainWindow(QMainWindow):
         for entry in outputs:
             speaker_box.addItem(entry, _device_index(entry))
 
+        quality_box = QComboBox()
+        for name, (width, height, fps) in VIDEO_PROFILES.items():
+            quality_box.addItem(f"{name} — {width}×{height} · {fps} ips", name)
+
+        screen_fps_box = QComboBox()
+        for value in (10, 15, 24, 30):
+            screen_fps_box.addItem(f"{value} ips", value)
+
+        monitor_box = QComboBox()
+        monitors = list_monitors()
+        for index, label in enumerate(monitors, start=1):
+            monitor_box.addItem(label, index)
+
         for label, box in (
             (t("call.camera"), cam_box),
             (t("call.microphone"), mic_box),
             (t("call.speaker"), speaker_box),
+            (t("call.quality"), quality_box),
+            (t("call.monitor"), monitor_box),
+            (t("call.screen_fps"), screen_fps_box),
         ):
             row = QHBoxLayout()
             row.addWidget(QLabel(label))
@@ -383,7 +399,12 @@ class MainWindow(QMainWindow):
             camera = cam_box.currentText()
             camera = None if camera == t("call.no_camera") else camera
             self.manager.set_media_devices(
-                camera, mic_box.currentData(), speaker_box.currentData()
+                camera,
+                mic_box.currentData(),
+                speaker_box.currentData(),
+                quality_box.currentData(),
+                screen_fps_box.currentData(),
+                monitor_box.currentData(),
             )
 
     # --- Appels -----------------------------------------------------------
