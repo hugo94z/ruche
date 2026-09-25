@@ -26,6 +26,7 @@ for _package in (
     "pygrabber",
     "comtypes",
     "numpy",
+    "PIL",
 ):
     try:
         _d, _b, _h = collect_all(_package)
@@ -45,7 +46,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "PIL"],
+    excludes=["tkinter", "matplotlib"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

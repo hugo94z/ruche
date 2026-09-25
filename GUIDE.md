@@ -98,6 +98,27 @@ Bouton **Périphériques** (fenêtre principale) : caméra, micro, haut-parleur.
 - Le son est repris via `sounddevice` ; les noms de périphériques sont listés
   avec leur numéro.
 
+### 3.6 Plusieurs salons et messages privés
+
+- La **barre latérale** (à gauche) liste les salons ouverts. Cliquez sur un
+  salon pour le rendre actif ; **clic droit → Quitter ce salon** pour le fermer.
+- Le bouton **Rejoindre** ouvre un salon **sans fermer les autres** : saisissez
+  un autre code et cliquez. Le bouton **Quitter** ferme le salon actif.
+- Clic droit sur un membre → **Message privé** : une conversation 1‑à‑1
+  persistante. Elle apparaît dans la barre latérale sous le pseudo du
+  correspondant.
+
+### 3.7 Modifier, supprimer, réagir
+
+- Sur un message, cliquez le lien **⋯** (à droite de l'horodatage) pour ouvrir
+  le menu : **Modifier**, **Supprimer**, **Réagir** (👍 ❤️ 😂 ✅).
+- Vous ne pouvez modifier ou supprimer que **vos** messages.
+- Une modification affiche **« (modifié) »** ; une suppression masque le message
+  partout, mais l'entrée d'origine reste dans le journal signé (rien n'est
+  réécrit en douce).
+- Les images reçues s'affichent en **vignette** ; un clic ouvre l'original.
+- Un transfert interrompu **reprend au dernier octet reçu** à la reconnexion.
+
 ---
 
 ## 4. Les trois façons de se connecter
@@ -218,6 +239,7 @@ Résultat : `dist\Ruche\Ruche.exe`
 .\.venv\Scripts\python.exe tools\smoke_test.py   # maillage, chat, fichiers, bascule d'hôte
 .\.venv\Scripts\python.exe tools\lan_test.py     # découverte mDNS sans serveur
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
+.\.venv\Scripts\python.exe tools\messaging_test.py  # multi-salons, édition, réactions, reprise, MP
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface hors écran
 ```
 
@@ -259,10 +281,10 @@ app/
   core/
     identity.py             identité locale
     storage.py              stockage SQLite
-    history.py              journal répliqué
-    files.py                magasin de fichiers
+    history.py              journal répliqué (+ édition/réactions)
+    files.py                magasin de fichiers, vignettes, reprise
     media.py                caméra, micro, haut-parleur, écran
-    room.py                 salon : membres, hôte, chat, fichiers, appels
+    room.py                 hub multi-salons (RoomSession + RoomManager)
     network/
       rendezvous.py         client du serveur de rendez-vous
       lan.py                découverte mDNS + signalisation locale

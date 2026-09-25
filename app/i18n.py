@@ -55,6 +55,26 @@ STRINGS: dict[str, str] = {
     "chat.attach_filter": "Tous les fichiers (*.*)",
     "chat.empty": "Aucun message pour l'instant. Dites bonjour !",
     "chat.host_changed": "L'hôte est maintenant {pseudo}.",
+    "chat.edited": "(modifié)",
+    "chat.actions": "Actions sur le message",
+    "chat.edit": "Modifier",
+    "chat.edit_title": "Modifier le message",
+    "chat.delete": "Supprimer",
+    "chat.delete_confirm": "Supprimer ce message pour tout le monde ?",
+    "chat.react": "Réagir",
+    "chat.reaction_added": "Réaction ajoutée",
+
+    # Salons (barre latérale)
+    "rooms.title": "Salons",
+    "rooms.dm_suffix": "message privé",
+    "rooms.leave": "Quitter ce salon",
+    "rooms.close_dm": "Fermer la conversation",
+    "rooms.new": "Nouveau salon",
+
+    # Messages privés
+    "peer.dm": "Message privé…",
+    "dm.title": "Message privé avec {pseudo}",
+    "dm.empty": "Début de la conversation privée avec {pseudo}.",
 
     # Appels
     "call.title": "Appel",
@@ -105,6 +125,7 @@ STRINGS: dict[str, str] = {
     "tray.quit": "Quitter",
     "tray.still_running": "Ruche continue de tourner en arrière-plan pour recevoir les messages.",
     "tray.new_message": "Nouveau message de {pseudo}",
+    "tray.new_message_room": "{pseudo} dans « {room} »",
     "settings.autostart": "Lancer Ruche au démarrage de Windows",
     "settings.autostart_hint": "Ruche démarre réduit en zone de notification et vous prévient des nouveaux messages.",
     "settings.theme": "Thème",

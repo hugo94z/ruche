@@ -12,6 +12,9 @@ cryptography>=43
 mss>=9.0
 sounddevice>=0.5
 
+# --- Vignettes des images reçues ---
+Pillow>=10
+
 # --- Appels (capture et restitution média) ---
 numpy>=1.26
 pygrabber>=0.2; sys_platform == "win32"

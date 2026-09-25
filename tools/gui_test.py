@@ -29,7 +29,7 @@ import qasync  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from app.core.identity import load_or_create  # noqa: E402
-from app.core.room import RoomManager  # noqa: E402
+from app.core.room import RoomManager, dm_key  # noqa: E402
 from app.core.storage import Storage  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
 
@@ -59,11 +59,23 @@ def main() -> int:
         checks.append(("Champ de saisie activé", window.message_input.isEnabled()))
         checks.append(("Membres listés (1)", window.members_list.count() == 1))
         checks.append(("Hôte indiqué dans la liste", "hôte" in window.members_list.item(0).text()))
+        checks.append(("Barre latérale : un salon", window.rooms_list.count() == 1))
 
         window.message_input.setText("Bonjour le salon")
         window._send_message()  # type: ignore[attr-defined]
         await asyncio.sleep(0.3)
         checks.append(("Message affiché", "Bonjour le salon" in window.transcript.toPlainText()))
+
+        # Édition et réactions (opérations append-only).
+        entry = manager.history.all_views()[0]
+        await manager.edit_message(entry["id"], "Bonjour corrigé")
+        await asyncio.sleep(0.2)
+        text = window.transcript.toPlainText()
+        checks.append(("Message édité affiché", "Bonjour corrigé" in text))
+        checks.append(("Mention « modifié »", "modifié" in text))
+        await manager.toggle_reaction(entry["id"], "👍")
+        await asyncio.sleep(0.2)
+        checks.append(("Réaction affichée", "👍" in window.transcript.toPlainText()))
 
         source = config.data_dir() / "note.txt"
         source.write_text("contenu de test", encoding="utf-8")
@@ -72,6 +84,30 @@ def main() -> int:
         checks.append(
             ("Fichier affiché dans le fil", "note.txt" in window.transcript.toPlainText())
         )
+
+        # Vignette d'une image.
+        try:
+            from PIL import Image
+
+            photo = config.data_dir() / "photo.png"
+            Image.new("RGB", (800, 600), (10, 120, 200)).save(photo)
+            await manager.send_file(photo)
+            await asyncio.sleep(0.3)
+            file_id = manager.files.prepare(photo).id
+            thumb = manager.files.thumbnail(file_id)
+            checks.append(("Vignette générée par l'interface", thumb is not None))
+        except ImportError:
+            checks.append(("Pillow disponible", False))
+
+        # Message privé : une session distincte apparaît dans la barre latérale.
+        peer = "0123456789abcdef"
+        await manager.start_dm(peer, "Bob")
+        await asyncio.sleep(0.3)
+        checks.append(("Message privé ouvert", window.rooms_list.count() == 2))
+        checks.append(("Titre du message privé", "Bob" in window.windowTitle()))
+        await manager.leave_room(dm_key(manager.identity.peer_id, peer))
+        await asyncio.sleep(0.2)
+        checks.append(("Retour au salon après fermeture du MP", window.rooms_list.count() == 1))
 
         await manager.leave()
         await asyncio.sleep(0.2)

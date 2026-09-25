@@ -21,6 +21,11 @@ automatiquement** vers un autre participant si l'hôte se déconnecte.
 | Élection d'hôte et **bascule automatique** | ✅ |
 | Serveur de rendez-vous sans état | ✅ |
 | Envoi d'images / vidéos (pair-à-pair, vérifié SHA-256) | ✅ |
+| **Plusieurs salons simultanés** (barre latérale) | ✅ |
+| **Messages privés persistants** (1‑à‑1, historisés) | ✅ |
+| **Édition / suppression / réactions** (opérations signées) | ✅ |
+| **Vignettes** des images reçues | ✅ |
+| **Reprise des transferts** interrompus | ✅ |
 | Appels audio/vidéo de groupe | ✅ |
 | Partage d'écran | ✅ |
 | Découverte locale mDNS (sans serveur) | ✅ |
@@ -135,6 +140,23 @@ $env:RUCHE_DATA_DIR="$env:TEMP\ruche-bob";   .\.venv\Scripts\python.exe run.py
 - Les **images** reçues (jusqu'à 8 Mo) sont téléchargées automatiquement et
   affichées dans le fil ; les autres fichiers montrent un lien de
   téléchargement, puis s'ouvrent d'un clic une fois reçus.
+- Les images s'affichent en **vignette** (générée localement) ; un clic ouvre
+  l'original.
+- Un transfert interrompu **reprend au dernier octet reçu** : rien n'est
+  retéléchargé du début.
+
+### Salons et messages privés
+
+- **Plusieurs salons à la fois** : la barre latérale liste les salons ouverts ;
+  cliquez pour passer de l'un à l'autre, sans quitter les autres.
+- Chaque salon garde son propre historique, ses membres, son hôte et son appel.
+- Clic droit sur un membre → **Message privé** : une conversation 1‑à‑1
+  persistante, historisée localement et répliquée avec la même signature que
+  le reste du maillage.
+- Clic droit sur un message (le lien **⋯**) → **modifier**, **supprimer** ou
+  **réagir**. L'édition et la suppression ne concernent que vos propres
+  messages, et restent des **opérations signées** : rien n'est réécrit en
+  douce, l'entrée d'origine est conservée dans le journal.
 
 ### Appels
 
@@ -214,6 +236,8 @@ docker compose -f deploy/docker-compose.yml up -d
 .\.venv\Scripts\python.exe tools\lan_test.py     # découverte mDNS et connexion SANS serveur
 .\.venv\Scripts\python.exe tools\host_test.py    # hébergement d'un rendez-vous en un clic
 .\.venv\Scripts\python.exe tools\crypto_test.py  # signature et chiffrement de bout en bout
+.\.venv\Scripts\python.exe tools\signed_history_test.py  # journal signé (authentification)
+.\.venv\Scripts\python.exe tools\messaging_test.py  # multi-salons, édition, réactions, reprise, MP
 .\.venv\Scripts\python.exe tools\media_test.py   # cadence 30 fps, écran, annulation d'écho
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface, en mode hors écran
@@ -231,11 +255,11 @@ app/
   core/
     identity.py             identité locale (clé + pseudo)
     storage.py              stockage SQLite (messages, fichiers, salons)
-    history.py              journal répliqué (Lamport)
-    files.py                magasin de fichiers (adressage par SHA-256)
+    history.py              journal répliqué (Lamport) + édition/réactions
+    files.py                magasin de fichiers (SHA-256), vignettes, reprise
     media.py                caméra, micro, haut-parleur
     hosting.py              hébergement d'un rendez-vous depuis l'application
-    room.py                 salon : membres, élection d'hôte, chat, fichiers, appels
+    room.py                 hub multi-salons : RoomSession (salon) + RoomManager
     network/
       rendezvous.py         client du serveur de rendez-vous
       lan.py                découverte mDNS + signalisation locale
@@ -266,14 +290,14 @@ ruche.spec / build.ps1      empaquetage PyInstaller
 ## État du développement (v1.0.0 en cours)
 
 Objectif : **une seule version 1.0.0** regroupant 22 fonctionnalités, puis publication.
-Avancement : **3 chantiers sur 6 terminés**.
+Avancement : **4 chantiers sur 6 terminés**.
 
 | Chantier | Contenu | État |
 |---|---|---|
 | **1 · Sécurité** | Signature Ed25519 des messages · empreintes vérifiables · détection de changement de clé · blocage/sourdine · limitation de débit | ✅ **terminé** |
 | **2 · Présence** | Notifications système · zone de notification · démarrage auto Windows · reconnexion automatique · thème clair/sombre · relais TURN en interface · écran d'accueil | ✅ **7/8** (reste l'indicateur de frappe et les accusés de réception) |
 | **3 · Appels** | 30 fps réels · profils de qualité · choix de l'écran · annulation d'écho + réduction de bruit | ✅ **terminé** |
-| **4 · Messagerie** | Multi-salons (barre latérale) · messages privés persistants · édition/suppression/réactions · vignettes · reprise des transferts | ⏳ **à faire** |
+| **4 · Messagerie** | Multi-salons (barre latérale) · messages privés persistants · édition/suppression/réactions · vignettes · reprise des transferts | ✅ **terminé** |
 | **5 · Hors ligne** | Boîte aux lettres chiffrée, livraison différée | ⏳ **à faire** |
 | **6 · Distribution** | Purge du cache avec sélection · mise à jour par bouton · signature SignPath | ⏳ **à faire** |
 
@@ -281,12 +305,18 @@ Avancement : **3 chantiers sur 6 terminés**.
 
 - Le **chiffrement de bout en bout a été retiré** à la demande ; la
   **signature des messages est conservée**.
-- Le chantier 4 est un **refactor de fond** : passer d'un salon par application
-  à N salons simultanés touche le cœur (`room.py`), les notifications et les
-  messages privés. À faire **avant** le chantier 5.
+- Le chantier 4 a extrait un `RoomSession` par salon : `RoomManager` est
+  désormais un **hub** (identité, confiance, fichiers partagés, réglages média)
+  qui possède plusieurs salons, avec une API historique déléguée au salon actif.
+- L'édition, la suppression et les réactions sont des **opérations signées
+  append-only** qui référencent un message (`extra.target`) : l'entrée d'origine
+  n'est jamais réécrite, la vue est recalculée en repliant le journal.
+- Un **message privé** est un salon à deux dont le code dérive des deux
+  identités (`dm:<id>:<id>`) : il réutilise toute la mécanique (historique
+  signé, réplication, reconnexion) et persiste localement.
 - Les **prototypes de dérisquage** sont conservés : `tools/aec_poc.py`
   (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
-- La suite de tests compte **63 vérifications**, toutes vertes.
+- La suite de tests compte **97 vérifications**, toutes vertes.
 
 ## Empaqueter l'application
 

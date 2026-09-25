@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QColor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QCloseEvent, QColor, QCursor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QCheckBox,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -197,8 +198,8 @@ class MainWindow(QMainWindow):
         asyncio.ensure_future(self._shutdown())
 
     async def _shutdown(self) -> None:
-        if self.manager.room is not None:
-            await self.manager.leave()
+        if self.manager.rooms:
+            await self.manager.close()
         if self.host.hosting:
             await self.host.stop()
         if self.tray is not None:
@@ -236,8 +237,13 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.new_room_button)
 
         self.join_button = QPushButton(t("connect.join"))
-        self.join_button.clicked.connect(self._toggle_join)
+        self.join_button.clicked.connect(self._join)
         bar.addWidget(self.join_button)
+
+        self.leave_button = QPushButton(t("connect.leave"))
+        self.leave_button.clicked.connect(self._leave_active)
+        self.leave_button.setEnabled(False)
+        bar.addWidget(self.leave_button)
 
         self.call_button = QPushButton(t("call.start"))
         self.call_button.clicked.connect(self._start_call)
@@ -264,6 +270,18 @@ class MainWindow(QMainWindow):
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
+
+        rooms_label = QLabel(t("rooms.title"))
+        rooms_label.setFont(QFont("", 10, QFont.Bold))
+        left_layout.addWidget(rooms_label)
+        self.rooms_list = QListWidget()
+        self.rooms_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.rooms_list.customContextMenuRequested.connect(self._room_menu)
+        self.rooms_list.itemClicked.connect(self._on_room_clicked)
+        self._room_rows: list[dict] = []
+        self.rooms_list.setMaximumHeight(180)
+        left_layout.addWidget(self.rooms_list)
+
         self.members_label = QLabel(t("members.title", count=0))
         self.members_label.setFont(QFont("", 10, QFont.Bold))
         left_layout.addWidget(self.members_label)
@@ -311,12 +329,6 @@ class MainWindow(QMainWindow):
         code = "".join(secrets.choice(_ROOM_ALPHABET) for _ in range(6))
         self.room_input.setText(code)
 
-    def _toggle_join(self) -> None:
-        if self.manager.room is None:
-            self._join()
-        else:
-            asyncio.ensure_future(self._leave())
-
     def _join(self) -> None:
         pseudo = self.pseudo_input.text().strip()
         room = self.room_input.text().strip().upper()
@@ -330,8 +342,47 @@ class MainWindow(QMainWindow):
         self._rendezvous_url = self.rendezvous_input.text().strip()
         asyncio.ensure_future(self.manager.join(room, pseudo, self._rendezvous_url))
 
+    def _leave_active(self) -> None:
+        asyncio.ensure_future(self._leave())
+
     async def _leave(self) -> None:
         await self.manager.leave()
+
+    def _on_room_clicked(self, item: QListWidgetItem) -> None:
+        code = item.data(Qt.UserRole)
+        if code:
+            asyncio.ensure_future(self.manager.switch_room(code))
+
+    def _room_menu(self, pos) -> None:
+        item = self.rooms_list.itemAt(pos)
+        if item is None:
+            return
+        code = item.data(Qt.UserRole)
+        row = next((r for r in self._room_rows if r.get("code") == code), {})
+        menu = QMenu(self)
+        label = t("rooms.close_dm") if row.get("dm") else t("rooms.leave")
+        menu.addAction(label, lambda: asyncio.ensure_future(self.manager.leave_room(code)))
+        menu.exec(self.rooms_list.mapToGlobal(pos))
+
+    def _on_rooms(self, payload: object) -> None:
+        self._room_rows = list(payload or [])  # type: ignore[arg-type]
+        self.rooms_list.clear()
+        for row in self._room_rows:
+            if row.get("dm"):
+                text = f"👤 {row.get('title', '?')}"
+            else:
+                text = f"# {row.get('code', '')}"
+            if row.get("unread"):
+                text += f"  • {row['unread']}"
+            item = QListWidgetItem(text)
+            item.setData(Qt.UserRole, row.get("code"))
+            if row.get("active"):
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            if row.get("call"):
+                item.setText(text + "  📞")
+            self.rooms_list.addItem(item)
 
     def _send_message(self) -> None:
         text = self.message_input.text().strip()
@@ -443,6 +494,45 @@ class MainWindow(QMainWindow):
             path = self.manager.files.path(text.split(":", 1)[1])
             if path is not None:
                 _open_path(path)
+        elif text.startswith("ruche-msg:"):
+            self._message_menu(text.split(":", 1)[1])
+
+    def _message_menu(self, message_id: str) -> None:
+        view = next(
+            (e for e in self.manager.history.all_views() if e.get("id") == message_id),
+            None,
+        )
+        if view is None:
+            return
+        is_mine = view.get("origin") == self.manager.identity.peer_id
+        menu = QMenu(self)
+        if is_mine and view.get("kind") == "text":
+            menu.addAction(t("chat.edit"), lambda: self._edit_message(view))
+        if is_mine:
+            menu.addAction(t("chat.delete"), lambda: self._delete_message(message_id))
+        if is_mine:
+            menu.addSeparator()
+        reactions = menu.addMenu(t("chat.react"))
+        for emoji in ("👍", "❤️", "😂", "✅"):
+            reactions.addAction(
+                emoji,
+                lambda e=emoji: asyncio.ensure_future(
+                    self.manager.toggle_reaction(message_id, e)
+                ),
+            )
+        menu.exec(QCursor.pos())
+
+    def _edit_message(self, view: dict) -> None:
+        text, ok = QInputDialog.getText(
+            self, t("chat.edit_title"), t("chat.edit"), QLineEdit.Normal, str(view.get("body", ""))
+        )
+        if ok and text.strip():
+            asyncio.ensure_future(self.manager.edit_message(view["id"], text))
+
+    def _delete_message(self, message_id: str) -> None:
+        answer = QMessageBox.question(self, t("chat.delete"), t("chat.delete_confirm"))
+        if answer == QMessageBox.Yes:
+            asyncio.ensure_future(self.manager.delete_message(message_id))
 
     def _start_call(self) -> None:
         asyncio.ensure_future(self.manager.start_call())
@@ -668,6 +758,8 @@ class MainWindow(QMainWindow):
             "status": self._on_status,
             "joined": self._on_joined,
             "left": self._on_left,
+            "rooms": self._on_rooms,
+            "room-activity": self._on_room_activity,
             "members": self._on_members,
             "history": self._on_history,
             "message": self._on_message,
@@ -691,35 +783,63 @@ class MainWindow(QMainWindow):
     def _on_status(self, payload: object) -> None:
         self.statusBar().showMessage(str(payload))
 
+    def _session_title(self, room: str) -> str:
+        session = self.manager.rooms.get(room)
+        if session is not None and session.is_dm:
+            pseudo = session.dm_pseudo or (session.peer_id or "")[:8]
+            return t("dm.title", pseudo=pseudo)
+        return room
+
     def _on_joined(self, payload: object) -> None:
         room = str(payload)
-        self.setWindowTitle(t("app.title") + f" — {room}")
+        self.setWindowTitle(t("app.title") + f" — {self._session_title(room)}")
         self.pseudo_input.setEnabled(False)
-        self.room_input.setEnabled(False)
+        self.room_input.setEnabled(True)
         self.rendezvous_input.setEnabled(False)
-        self.new_room_button.setEnabled(False)
-        self.join_button.setText(t("connect.leave"))
+        self.new_room_button.setEnabled(True)
+        self.leave_button.setEnabled(True)
         self.message_input.setEnabled(True)
         self.send_button.setEnabled(True)
         self.attach_button.setEnabled(True)
         self.call_button.setEnabled(True)
         self.message_input.setFocus()
-        self.statusBar().showMessage(t("connect.status_online", room=room))
+        self.statusBar().showMessage(t("connect.status_online", room=self._session_title(room)))
 
     def _on_left(self, _payload: object) -> None:
-        self.setWindowTitle(t("app.title"))
-        self.pseudo_input.setEnabled(True)
-        self.room_input.setEnabled(True)
-        self.rendezvous_input.setEnabled(True)
-        self.new_room_button.setEnabled(True)
-        self.join_button.setText(t("connect.join"))
-        self.message_input.setEnabled(False)
-        self.send_button.setEnabled(False)
-        self.attach_button.setEnabled(False)
-        self.call_button.setEnabled(False)
-        self.members_list.clear()
-        self.members_label.setText(t("members.title", count=0))
-        self.statusBar().showMessage(t("connect.status_idle"))
+        if self.manager.active_code is None:
+            self.setWindowTitle(t("app.title"))
+            self.pseudo_input.setEnabled(True)
+            self.room_input.setEnabled(True)
+            self.rendezvous_input.setEnabled(True)
+            self.new_room_button.setEnabled(True)
+            self.leave_button.setEnabled(False)
+            self.message_input.setEnabled(False)
+            self.send_button.setEnabled(False)
+            self.attach_button.setEnabled(False)
+            self.call_button.setEnabled(False)
+            self.members_list.clear()
+            self.members_label.setText(t("members.title", count=0))
+            self.transcript.clear()
+            self.statusBar().showMessage(t("connect.status_idle"))
+
+    def _on_room_activity(self, payload: object) -> None:
+        data = payload or {}
+        room = data.get("room", "")
+        entry = data.get("entry") or {}
+        if self.isActiveWindow():
+            return
+        session = self.manager.rooms.get(room)
+        title = self._session_title(room)
+        if isinstance(entry, dict) and entry.get("kind") == "call-invite":
+            self._notify(t("call.title"), t("call.incoming", pseudo=entry.get("pseudo", "")))
+            return
+        if isinstance(entry, dict):
+            pseudo = entry.get("pseudo", "")
+            body = str(entry.get("body", ""))
+            if session is not None and not session.is_dm:
+                self._notify(t("tray.new_message_room", pseudo=pseudo, room=title), body[:180])
+            else:
+                self._notify(t("tray.new_message", pseudo=pseudo), body[:180])
 
     def _on_members(self, payload: object) -> None:
         members = payload or []
@@ -752,6 +872,12 @@ class MainWindow(QMainWindow):
             return
         peer_id = row["id"]
         menu = QMenu(self)
+        menu.addAction(
+            t("peer.dm"),
+            lambda: asyncio.ensure_future(
+                self.manager.start_dm(peer_id, row.get("pseudo", ""))
+            ),
+        )
         menu.addAction(t("peer.show_fingerprint"), lambda: self._show_fingerprint(row))
         menu.addAction(
             t("peer.unverify") if row.get("verified") else t("peer.verify"),
@@ -789,6 +915,9 @@ class MainWindow(QMainWindow):
 
     def _on_message(self, payload: object) -> None:
         entry = payload or {}
+        if entry.get("_op"):  # édition / suppression / réaction : on redessine
+            self._rerender()
+            return
         self._append_entry(entry)  # type: ignore[arg-type]
         if (
             entry.get("origin") != self.manager.identity.peer_id  # type: ignore[union-attr]
@@ -800,8 +929,10 @@ class MainWindow(QMainWindow):
             )
 
     def _on_host(self, payload: object) -> None:
-        if payload:
-            self.setWindowTitle(t("app.title") + f" — {self.manager.room}")
+        if payload and self.manager.room:
+            self.setWindowTitle(
+                t("app.title") + f" — {self._session_title(self.manager.room)}"
+            )
 
     def _on_file_progress(self, payload: object) -> None:
         data = payload or {}
@@ -822,8 +953,15 @@ class MainWindow(QMainWindow):
 
     def _rerender(self) -> None:
         self.transcript.clear()
-        entries = self.manager.history.all_sorted()
+        entries = self.manager.history.all_views()
         if not entries:
+            session = self.manager.active
+            if session is not None and session.is_dm:
+                pseudo = session.dm_pseudo or (session.peer_id or "")[:8]
+                self.transcript.setHtml(
+                    f"<p style='color:#888'>{html.escape(t('dm.empty', pseudo=pseudo))}</p>"
+                )
+                return
             self.transcript.setHtml(
                 f"<p style='color:#888'>{html.escape(t('chat.empty'))}</p>"
             )
@@ -842,7 +980,9 @@ class MainWindow(QMainWindow):
         path = self.manager.files.path(file_id) if file_id else None
         if path is not None:
             if mime.startswith("image/"):
-                url = QUrl.fromLocalFile(str(path)).toString()
+                thumb = self.manager.files.thumbnail(file_id)
+                preview = thumb if thumb is not None else path
+                url = QUrl.fromLocalFile(str(preview)).toString()
                 return (
                     f"<img src='{url}' width='240'><br>"
                     f"<a href='ruche-open:{file_id}'>{name}</a> "
@@ -876,10 +1016,33 @@ class MainWindow(QMainWindow):
         else:
             body = html.escape(str(entry.get("body", ""))).replace("\n", "<br>")
 
+        edited = (
+            f" <span style='color:#999;font-size:8pt'>{html.escape(t('chat.edited'))}</span>"
+            if entry.get("edited")
+            else ""
+        )
+        entry_id = str(entry.get("id", ""))
+        actions = (
+            f" <a href='ruche-msg:{entry_id}' style='color:#999;text-decoration:none'>⋯</a>"
+            if entry_id
+            else ""
+        )
+        reactions = ""
+        chips = []
+        for emoji, names in (entry.get("reactions") or {}).items():
+            if names:
+                chips.append(f"{html.escape(emoji)} {len(names)}")
+        if chips:
+            reactions = (
+                "<br><span style='color:#555;font-size:9pt'>"
+                + "&nbsp;&nbsp;".join(chips)
+                + "</span>"
+            )
+
         block = (
             f"<div style='margin:4px 0'>"
-            f"{who} <span style='color:#999;font-size:9pt'>{stamp}</span><br>"
-            f"<span>{body}</span></div>"
+            f"{who} <span style='color:#999;font-size:9pt'>{stamp}</span>{edited}{actions}<br>"
+            f"<span>{body}</span>{reactions}</div>"
         )
         cursor = self.transcript.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
@@ -900,8 +1063,8 @@ class MainWindow(QMainWindow):
                 config.APP_NAME, t("tray.still_running"), self._tray_icon(), 4000
             )
             return
-        if self.manager.room is not None:
-            asyncio.ensure_future(self.manager.leave())
+        if self.manager.rooms:
+            asyncio.ensure_future(self.manager.close())
         if self.host.hosting:
             asyncio.ensure_future(self.host.stop())
         event.accept()

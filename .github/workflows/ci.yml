@@ -55,6 +55,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\signed_history_test.py
 
+      - name: Messagerie (multi-salons, edition, reactions, reprise, MP)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\messaging_test.py
+
       - name: Media (cadence 30 fps, ecran, annulation d'echo)
         shell: pwsh
         env:
