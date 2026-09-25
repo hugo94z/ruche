@@ -112,6 +112,42 @@ class MainWindow(QMainWindow):
         manager.add_listener(self._relay_event)
         self.core_event.connect(self._handle_event)
 
+    # --- Écran d'accueil (premier lancement) ------------------------------
+    def maybe_show_welcome(self) -> None:
+        settings = config.load_settings()
+        if settings.get("welcome_done"):
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(t("welcome.title"))
+        dialog.resize(600, 420)
+        layout = QVBoxLayout(dialog)
+
+        heading = QLabel(t("welcome.heading"))
+        heading.setFont(QFont("", 14, QFont.Bold))
+        heading.setWordWrap(True)
+        layout.addWidget(heading)
+
+        body = QLabel(t("welcome.body"))
+        body.setWordWrap(True)
+        layout.addWidget(body)
+
+        steps = QLabel(t("welcome.steps"))
+        steps.setWordWrap(True)
+        layout.addWidget(steps)
+
+        note = QLabel(t("welcome.note"))
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#b45309;")
+        layout.addWidget(note)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+
+        dialog.exec()
+        settings["welcome_done"] = True
+        config.save_settings(settings)
+
     # --- Zone de notification --------------------------------------------
     def _tray_icon(self) -> QIcon:
         pixmap = QPixmap(64, 64)

@@ -113,6 +113,29 @@ STRINGS: dict[str, str] = {
     "settings.turn_url": "Adresse TURN",
     "settings.turn_user": "Utilisateur",
     "settings.turn_pass": "Mot de passe",
+
+    # Écran d'accueil
+    "welcome.title": "Bienvenue dans Ruche",
+    "welcome.heading": "Bienvenue dans Ruche 👋",
+    "welcome.body": (
+        "Ruche est une messagerie pair-à-pair : vos messages passent "
+        "directement d'un ordinateur à l'autre, sans serveur central. "
+        "Personne d'autre ne peut les lire en chemin."
+    ),
+    "welcome.steps": (
+        "1.  Choisissez un pseudo, puis créez ou rejoignez un salon avec un code.\n"
+        "2.  Sur un même réseau, rien à configurer : les participants se trouvent tout seuls.\n"
+        "3.  Entre deux lieux différents, cliquez « Héberger un rendez-vous » et "
+        "transmettez l'adresse affichée.\n"
+        "4.  Cliquez « Appeler » pour démarrer un appel audio/vidéo, « Joindre un fichier » "
+        "pour envoyer une image ou une vidéo.\n"
+        "5.  Clic droit sur un membre : voir son empreinte, le bloquer, le mettre en sourdine."
+    ),
+    "welcome.note": (
+        "Astuce : fermer la fenêtre ne quitte pas Ruche — l'application reste en zone de "
+        "notification pour vous prévenir des nouveaux messages. Quittez par clic droit "
+        "sur l'icône → Quitter."
+    ),
 }
 
 

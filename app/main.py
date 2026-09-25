@@ -59,6 +59,7 @@ def main() -> int:
     # Démarré automatiquement avec Windows : on reste en zone de notification.
     if "--minimized" not in sys.argv:
         window.show()
+        window.maybe_show_welcome()
 
     with loop:
         loop.run_forever()
