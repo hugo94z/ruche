@@ -261,6 +261,33 @@ ruche.spec / build.ps1      empaquetage PyInstaller
 8. ✅ Durcissement — relais TURN, découverte mDNS locale, empaquetage PyInstaller
 9. ✅ v0.2.0 — hébergement d'un rendez-vous **en un clic** depuis l'application
 
+---
+
+## État du développement (v1.0.0 en cours)
+
+Objectif : **une seule version 1.0.0** regroupant 22 fonctionnalités, puis publication.
+Avancement : **3 chantiers sur 6 terminés**.
+
+| Chantier | Contenu | État |
+|---|---|---|
+| **1 · Sécurité** | Signature Ed25519 des messages · empreintes vérifiables · détection de changement de clé · blocage/sourdine · limitation de débit | ✅ **terminé** |
+| **2 · Présence** | Notifications système · zone de notification · démarrage auto Windows · reconnexion automatique · thème clair/sombre · relais TURN en interface · écran d'accueil | ✅ **7/8** (reste l'indicateur de frappe et les accusés de réception) |
+| **3 · Appels** | 30 fps réels · profils de qualité · choix de l'écran · annulation d'écho + réduction de bruit | ✅ **terminé** |
+| **4 · Messagerie** | Multi-salons (barre latérale) · messages privés persistants · édition/suppression/réactions · vignettes · reprise des transferts | ⏳ **à faire** |
+| **5 · Hors ligne** | Boîte aux lettres chiffrée, livraison différée | ⏳ **à faire** |
+| **6 · Distribution** | Purge du cache avec sélection · mise à jour par bouton · signature SignPath | ⏳ **à faire** |
+
+### Notes de reprise
+
+- Le **chiffrement de bout en bout a été retiré** à la demande ; la
+  **signature des messages est conservée**.
+- Le chantier 4 est un **refactor de fond** : passer d'un salon par application
+  à N salons simultanés touche le cœur (`room.py`), les notifications et les
+  messages privés. À faire **avant** le chantier 5.
+- Les **prototypes de dérisquage** sont conservés : `tools/aec_poc.py`
+  (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
+- La suite de tests compte **63 vérifications**, toutes vertes.
+
 ## Empaqueter l'application
 
 L'application peut être livrée en dossier autonome (aucun Python à installer) :
