@@ -74,8 +74,9 @@ jobs:
           $asset = "installer\Output\Ruche-Setup-${{ steps.version.outputs.value }}.exe"
           gh release view $tag 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag deja existante : mise a jour de l'installateur."
-            gh release upload $tag $asset --clobber
+            Write-Host "Release $tag deja existante : aucune modification."
+            Write-Host "On ne remplace JAMAIS l'installateur : l'empreinte SHA-256"
+            Write-Host "publiee dans le manifeste winget doit rester valide."
           } else {
             gh release create $tag $asset `
               --title "Ruche ${{ steps.version.outputs.value }}" `
