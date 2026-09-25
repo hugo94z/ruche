@@ -132,6 +132,26 @@ def build_app() -> web.Application:
     return app
 
 
+async def start_server(host: str = "0.0.0.0", port: int = 8765):
+    """Démarre le rendez-vous dans la boucle d'événements courante.
+
+    Renvoie (runner, port_reel). Le port réel peut différer si celui demandé
+    est déjà occupé (on en prend alors un libre). Utilisé par l'application
+    pour devenir elle-même le point de rencontre, sans terminal.
+    """
+    runner = web.AppRunner(build_app())
+    await runner.setup()
+    site = web.TCPSite(runner, host, port)
+    try:
+        await site.start()
+    except OSError:
+        site = web.TCPSite(runner, host, 0)
+        await site.start()
+    actual = site._server.sockets[0].getsockname()[1]
+    log.info("Rendez-vous en cours sur le port %d", actual)
+    return runner, actual
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Serveur de rendez-vous Ruche")
     parser.add_argument("--host", default="0.0.0.0")

@@ -21,7 +21,7 @@ Sur le **Bureau**, double-cliquez sur le raccourci **Ruche**.
 
 | Méthode | Commande |
 |---|---|
-| Installateur | `Ruche-Setup-0.1.0.exe` (page des versions GitHub) |
+| Installateur | `Ruche-Setup-0.2.0.exe` (page des versions GitHub) |
 | winget | `winget install Ruche.Ruche` |
 
 L'installation se fait **par utilisateur**, dans `%LOCALAPPDATA%\Programs\Ruche`
@@ -122,6 +122,20 @@ La **barre de statut** (en bas) affiche l'état : « découverte locale active
 ---
 
 ## 5. Héberger un serveur de rendez-vous
+
+### Option A — en un clic, depuis l'application (le plus simple)
+
+Dans Ruche, clique **Héberger un rendez-vous**. L'application démarre le
+serveur et affiche l'adresse à transmettre :
+
+- **Copier** place l'adresse dans le presse-papiers ;
+- **Me connecter via cet hébergement** remplit le champ pour toi ;
+- garde Ruche ouvert : si tu fermes, les autres ne pourront plus te rejoindre
+  (les conversations déjà établies continuent).
+
+Depuis Internet, il faut une **redirection du port 8765** sur ta box.
+
+### Option B — sur une machine dédiée
 
 Sur n'importe quelle machine joignable par les participants (pas forcément la
 vôtre) :

@@ -53,6 +53,23 @@ STRINGS: dict[str, str] = {
     "call.no_camera": "Mire de test (aucune caméra)",
     "call.system_default": "Par défaut du système",
 
+    # Hébergement d'un rendez-vous
+    "host.button": "Héberger un rendez-vous",
+    "host.title": "Héberger un rendez-vous",
+    "host.intro": "Vous êtes le point de rencontre. Transmettez une adresse ci-dessous aux autres participants.",
+    "host.address": "Adresse à partager",
+    "host.copy": "Copier",
+    "host.copied": "Adresse copiée dans le presse-papiers",
+    "host.public_ok": "Depuis Internet : {url}  (nécessite une redirection du port {port} sur votre box)",
+    "host.public_unknown": "Depuis Internet : adresse publique non détectée. Il faudra une redirection de port sur votre box.",
+    "host.warning": "Gardez Ruche ouvert : si vous fermez l'application, les autres ne pourront plus vous rejoindre.",
+    "host.use": "Me connecter via cet hébergement",
+    "host.stop": "Arrêter l'hébergement",
+    "host.close": "Fermer",
+    "host.started": "Hébergement démarré sur le port {port}",
+    "host.stopped": "Hébergement arrêté",
+    "host.failed": "Impossible de démarrer l'hébergement : {error}",
+
     # Divers
     "misc.copy": "Copier",
     "misc.copied": "Copié",

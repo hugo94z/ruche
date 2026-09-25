@@ -37,6 +37,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\call_test.py
 
+      - name: Hebergement d'un rendez-vous en un clic
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\host_test.py
+
       - name: Interface (hors ecran)
         shell: pwsh
         env:

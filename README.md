@@ -24,6 +24,7 @@ automatiquement** vers un autre participant si l'hôte se déconnecte.
 | Appels audio/vidéo de groupe | ✅ |
 | Partage d'écran | ✅ |
 | Découverte locale mDNS (sans serveur) | ✅ |
+| Hébergement d'un rendez-vous en un clic | ✅ |
 | Relais TURN configurable | ✅ |
 | Empaquetage en application autonome | ✅ |
 
@@ -35,7 +36,7 @@ Toutes les phases de la feuille de route sont réalisées (voir plus bas).
 
 ### Windows — installateur ou winget
 
-Téléchargez **`Ruche-Setup-0.1.0.exe`** depuis la page des versions :
+Téléchargez **`Ruche-Setup-0.2.0.exe`** depuis la page des versions :
 
 <https://github.com/hugo94z/ruche/releases/latest>
 
@@ -144,6 +145,21 @@ $env:RUCHE_DATA_DIR="$env:TEMP\ruche-bob";   .\.venv\Scripts\python.exe run.py
 - Laissez simplement le champ « Serveur de rendez-vous » vide.
 - Le rendez-vous ne sert qu'à se retrouver **entre réseaux différents**.
 
+### Héberger le point de rencontre en un clic
+
+Le bouton **Héberger un rendez-vous** de l'application démarre un serveur de
+rendez-vous directement depuis ta machine, **sans terminal ni Python** :
+
+- l'adresse à transmettre est affichée (réseau local, plus l'adresse publique
+  si elle est détectable) ;
+- un bouton **Copier** la place dans le presse-papiers ;
+- **Me connecter via cet hébergement** remplit le champ automatiquement.
+
+> ⚠️ Limite honnête : depuis Internet, il faut que le port (8765 par défaut)
+> soit joignable depuis l'extérieur — donc une **redirection de port** sur la
+> box. Sans cela, l'hébergement fonctionne sur le **réseau local**. Pour deux
+> lieux différents sans redirection, héberge le rendez-vous ailleurs (`deploy/docker-compose.yml`).
+
 ### Relais TURN (réseaux récalcitrants)
 
 Quand le NAT bloque le pair-à-pair, un relais TURN prend le relais. Trois façons
@@ -177,6 +193,7 @@ docker compose -f deploy/docker-compose.yml up -d
 ```powershell
 .\.venv\Scripts\python.exe tools\smoke_test.py   # socle : maillage, chat, fichiers, bascule d'hôte
 .\.venv\Scripts\python.exe tools\lan_test.py     # découverte mDNS et connexion SANS serveur
+.\.venv\Scripts\python.exe tools\host_test.py    # hébergement d'un rendez-vous en un clic
 .\.venv\Scripts\python.exe tools\call_test.py    # appels + partage d'écran
 .\.venv\Scripts\python.exe tools\gui_test.py     # interface, en mode hors écran
 ```
@@ -193,6 +210,7 @@ app/
     history.py              journal répliqué (Lamport)
     files.py                magasin de fichiers (adressage par SHA-256)
     media.py                caméra, micro, haut-parleur
+    hosting.py              hébergement d'un rendez-vous depuis l'application
     room.py                 salon : membres, élection d'hôte, chat, fichiers, appels
     network/
       rendezvous.py         client du serveur de rendez-vous
@@ -217,6 +235,7 @@ ruche.spec / build.ps1      empaquetage PyInstaller
 6. ✅ Appels — audio et vidéo, de groupe en maillage
 7. ✅ Partage d'écran
 8. ✅ Durcissement — relais TURN, découverte mDNS locale, empaquetage PyInstaller
+9. ✅ v0.2.0 — hébergement d'un rendez-vous **en un clic** depuis l'application
 
 ## Empaqueter l'application
 

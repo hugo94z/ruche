@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QFont
+from PySide6.QtGui import QCloseEvent, QFont, QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
+from ..core.hosting import RendezvousHost
 from ..core.media import list_audio_devices, list_cameras
 from ..core.room import RoomManager
 from ..i18n import t
@@ -95,6 +96,8 @@ class MainWindow(QMainWindow):
         self.manager = manager
         self._rendezvous_url = config.DEFAULT_RENDEZVOUS_URL
         self._call_window: CallWindow | None = None
+        self.host = RendezvousHost()
+        self._host_dialog: QDialog | None = None
 
         self.setWindowTitle(t("app.title"))
         self.resize(960, 640)
@@ -150,6 +153,9 @@ class MainWindow(QMainWindow):
         rv.addWidget(QLabel(t("connect.rendezvous")))
         self.rendezvous_input = QLineEdit(self._rendezvous_url)
         rv.addWidget(self.rendezvous_input, 1)
+        self.host_button = QPushButton(t("host.button"))
+        self.host_button.clicked.connect(self._open_host_dialog)
+        rv.addWidget(self.host_button)
         layout.addLayout(rv)
 
         # Corps : membres | chat
@@ -231,6 +237,94 @@ class MainWindow(QMainWindow):
             return
         self.message_input.clear()
         asyncio.ensure_future(self.manager.send_text(text))
+
+    # --- Hébergement d'un rendez-vous -------------------------------------
+    def _open_host_dialog(self) -> None:
+        asyncio.ensure_future(self._start_host_and_show())
+
+    async def _start_host_and_show(self) -> None:
+        if not self.host.hosting:
+            try:
+                port = await self.host.start()
+            except Exception as exc:  # port occupé, permissions…
+                QMessageBox.warning(self, t("host.title"), t("host.failed", error=exc))
+                return
+            self.statusBar().showMessage(t("host.started", port=port))
+            # L'hôte se connecte à son propre rendez-vous via la boucle locale.
+            self.rendezvous_input.setText(self.host.loopback_url())
+            asyncio.ensure_future(self._refresh_host_addresses())
+        self._show_host_dialog()
+
+    async def _refresh_host_addresses(self) -> None:
+        await self.host.refresh_public_ip()
+        if self._host_dialog is not None:
+            self._show_host_dialog()  # rafraîchit la liste des adresses
+
+    def _copy_address(self, address: str) -> None:
+        QGuiApplication.clipboard().setText(address)
+        self.statusBar().showMessage(t("host.copied"))
+
+    def _show_host_dialog(self) -> None:
+        if self._host_dialog is not None:
+            self._host_dialog.close()
+            self._host_dialog = None
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(t("host.title"))
+        dialog.resize(600, 290)
+        layout = QVBoxLayout(dialog)
+
+        intro = QLabel(t("host.intro"))
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        layout.addWidget(QLabel(t("host.address")))
+        row = QHBoxLayout()
+        addresses = QComboBox()
+        addresses.addItems(self.host.share_urls() or ["—"])
+        row.addWidget(addresses, 1)
+        copy_button = QPushButton(t("host.copy"))
+        copy_button.clicked.connect(lambda: self._copy_address(addresses.currentText()))
+        row.addWidget(copy_button)
+        layout.addLayout(row)
+
+        public = self.host.public_url()
+        if public:
+            public_label = QLabel(t("host.public_ok", url=public, port=self.host.port))
+        else:
+            public_label = QLabel(t("host.public_unknown"))
+        public_label.setWordWrap(True)
+        layout.addWidget(public_label)
+
+        warning = QLabel(t("host.warning"))
+        warning.setWordWrap(True)
+        warning.setStyleSheet("color:#b45309;")
+        layout.addWidget(warning)
+
+        buttons = QDialogButtonBox()
+        use_button = buttons.addButton(t("host.use"), QDialogButtonBox.AcceptRole)
+        stop_button = buttons.addButton(t("host.stop"), QDialogButtonBox.DestructiveRole)
+        buttons.addButton(t("host.close"), QDialogButtonBox.RejectRole)
+        layout.addWidget(buttons)
+
+        use_button.clicked.connect(
+            lambda: self._use_host_address(dialog, addresses.currentText())
+        )
+        stop_button.clicked.connect(lambda: asyncio.ensure_future(self._stop_host(dialog)))
+        dialog.finished.connect(lambda _result: setattr(self, "_host_dialog", None))
+
+        self._host_dialog = dialog
+        dialog.open()
+
+    def _use_host_address(self, dialog: QDialog, address: str) -> None:
+        if address and address != "—":
+            self.rendezvous_input.setText(address)
+        dialog.accept()
+
+    async def _stop_host(self, dialog: QDialog) -> None:
+        await self.host.stop()
+        self.statusBar().showMessage(t("host.stopped"))
+        dialog.accept()
 
     def _attach_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -551,4 +645,6 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.manager.room is not None:
             asyncio.ensure_future(self.manager.leave())
+        if self.host.hosting:
+            asyncio.ensure_future(self.host.stop())
         event.accept()

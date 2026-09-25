@@ -77,6 +77,24 @@ def main() -> int:
         await asyncio.sleep(0.2)
         checks.append(("Retour à l'état hors ligne", not window.message_input.isEnabled()))
 
+        # Hébergement d'un rendez-vous depuis l'application
+        await window._start_host_and_show()  # type: ignore[attr-defined]
+        checks.append(
+            ("Hébergement actif", window.host.hosting and window.host.port > 0)  # type: ignore[attr-defined]
+        )
+        checks.append(
+            (
+                "Adresse locale pré-remplie",
+                window.rendezvous_input.text().startswith("ws://127.0.0.1:"),  # type: ignore[attr-defined]
+            )
+        )
+        share = window.host.share_urls()  # type: ignore[attr-defined]
+        checks.append(
+            ("Adresses de partage cohérentes", bool(share) and all(u.startswith("ws://") for u in share))
+        )
+        await window.host.stop()  # type: ignore[attr-defined]
+        checks.append(("Hébergement arrêté", not window.host.hosting))  # type: ignore[attr-defined]
+
         loop.stop()
 
     loop.call_soon(lambda: asyncio.ensure_future(scenario()))
