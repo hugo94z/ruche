@@ -13,6 +13,10 @@ STRINGS: dict[str, str] = {
     "connect.room": "Salon",
     "connect.room.placeholder": "code du salon",
     "connect.rendezvous": "Serveur de rendez-vous",
+    "connect.password": "Mot de passe",
+    "connect.password.placeholder": "salon (optionnel)",
+    "connect.encrypted": "Messages chiffrés de bout en bout",
+    "connect.no_password": "Sans mot de passe : les messages ne sont pas chiffrés",
     "connect.join": "Rejoindre",
     "connect.leave": "Quitter",
     "connect.new_room": "Nouveau salon",
@@ -25,6 +29,28 @@ STRINGS: dict[str, str] = {
     "members.title": "Membres ({count})",
     "members.you": "vous",
     "members.host": "hôte",
+    "members.verified": "vérifié",
+    "members.blocked": "bloqué",
+    "members.muted": "sourdine",
+
+    # Confiance et modération
+    "peer.show_fingerprint": "Voir l'empreinte…",
+    "peer.verify": "Marquer comme vérifié",
+    "peer.unverify": "Retirer la vérification",
+    "peer.block": "Bloquer ce pair",
+    "peer.unblock": "Débloquer",
+    "peer.mute": "Mettre en sourdine",
+    "peer.unmute": "Retirer la sourdine",
+    "peer.fingerprint_title": "Empreinte de {pseudo}",
+    "peer.fingerprint_body": (
+        "Compare cette empreinte avec ton correspondant par un autre canal "
+        "(de vive voix, SMS…).\n\n{pseudo}\n{fingerprint}\n\n"
+        "Si elle diffère, quelqu'un se fait peut-être passer pour lui."
+    ),
+    "security.key_changed": (
+        "⚠ Attention : {pseudo} se présente avec une NOUVELLE clé.\n\n"
+        "Cela peut signifier une usurpation d'identité. Le pair a été ignoré."
+    ),
 
     # Chat
     "chat.placeholder": "Écrivez un message…  (Entrée pour envoyer)",
@@ -77,6 +103,14 @@ STRINGS: dict[str, str] = {
     "misc.copy": "Copier",
     "misc.copied": "Copié",
     "misc.error": "Erreur",
+
+    # Zone de notification
+    "tray.open": "Ouvrir Ruche",
+    "tray.quit": "Quitter",
+    "tray.still_running": "Ruche continue de tourner en arrière-plan pour recevoir les messages.",
+    "tray.new_message": "Nouveau message de {pseudo}",
+    "settings.autostart": "Lancer Ruche au démarrage de Windows",
+    "settings.autostart_hint": "Ruche démarre réduit en zone de notification et vous prévient des nouveaux messages.",
 }
 
 

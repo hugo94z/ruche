@@ -49,6 +49,12 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: .venv\Scripts\python.exe tools\crypto_test.py
 
+      - name: Journal signe et chiffre (E2E)
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: .venv\Scripts\python.exe tools\e2e_crypto_test.py
+
       - name: Media (cadence 30 fps, ecran, annulation d'echo)
         shell: pwsh
         env:

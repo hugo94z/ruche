@@ -27,7 +27,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 # Champs qui sont signés (tout sauf la signature elle-même).
-SIGNED_FIELDS = ("id", "ts", "origin", "kind", "body", "extra", "at", "enc", "pub")
+SIGNED_FIELDS = ("id", "ts", "origin", "pseudo", "kind", "body", "extra", "at", "enc", "pub")
 
 # Paramètres scrypt : coûteux en mémoire, donc difficile à casser par force brute.
 _SCRYPT_N = 2**15

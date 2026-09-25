@@ -16,9 +16,10 @@ import sys
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QFont, QGuiApplication
+from PySide6.QtGui import QCloseEvent, QColor, QFont, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -29,14 +30,17 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QMenu,
     QPushButton,
     QSplitter,
+    QSystemTrayIcon,
     QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
 from .. import config
+from ..core import autostart
 from ..core.hosting import RendezvousHost
 from ..core.media import VIDEO_PROFILES, list_audio_devices, list_cameras, list_monitors
 from ..core.room import RoomManager
@@ -102,9 +106,69 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(t("app.title"))
         self.resize(960, 640)
         self._build_ui()
+        self._build_tray()
 
         manager.add_listener(self._relay_event)
         self.core_event.connect(self._handle_event)
+
+    # --- Zone de notification --------------------------------------------
+    def _tray_icon(self) -> QIcon:
+        pixmap = QPixmap(64, 64)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor("#2563eb"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(2, 2, 60, 60)
+        painter.setPen(QColor("white"))
+        font = QFont()
+        font.setPointSize(30)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, "R")
+        painter.end()
+        return QIcon(pixmap)
+
+    def _build_tray(self) -> None:
+        self.tray: QSystemTrayIcon | None = None
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        tray = QSystemTrayIcon(self._tray_icon(), self)
+        tray.setToolTip(config.APP_NAME)
+        menu = QMenu()
+        menu.addAction(t("tray.open"), self._restore_window)
+        menu.addAction(t("tray.quit"), self._quit_application)
+        tray.setContextMenu(menu)
+        tray.activated.connect(
+            lambda reason: self._restore_window()
+            if reason == QSystemTrayIcon.DoubleClick
+            else None
+        )
+        tray.show()
+        self.tray = tray
+
+    def _restore_window(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _notify(self, title: str, body: str) -> None:
+        if self.tray is not None:
+            self.tray.showMessage(title, body, self._tray_icon(), 6000)
+
+    def _quit_application(self) -> None:
+        asyncio.ensure_future(self._shutdown())
+
+    async def _shutdown(self) -> None:
+        if self.manager.room is not None:
+            await self.manager.leave()
+        if self.host.hosting:
+            await self.host.stop()
+        if self.tray is not None:
+            self.tray.hide()
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.quit()
 
     # --- Construction de l'interface -------------------------------------
     def _build_ui(self) -> None:
@@ -143,6 +207,13 @@ class MainWindow(QMainWindow):
         self.call_button.setEnabled(False)
         bar.addWidget(self.call_button)
 
+        bar.addWidget(QLabel(t("connect.password")))
+        self.password_input = QLineEdit()
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.setPlaceholderText(t("connect.password.placeholder"))
+        self.password_input.setFixedWidth(130)
+        bar.addWidget(self.password_input)
+
         self.devices_button = QPushButton(t("call.settings"))
         self.devices_button.clicked.connect(self._open_devices)
         bar.addWidget(self.devices_button)
@@ -167,6 +238,9 @@ class MainWindow(QMainWindow):
         self.members_label.setFont(QFont("", 10, QFont.Bold))
         left_layout.addWidget(self.members_label)
         self.members_list = QListWidget()
+        self.members_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.members_list.customContextMenuRequested.connect(self._member_menu)
+        self._member_rows: list[dict] = []
         left_layout.addWidget(self.members_list)
         splitter.addWidget(left)
 
@@ -225,7 +299,9 @@ class MainWindow(QMainWindow):
             room = self.room_input.text().strip().upper()
         self._rendezvous_url = self.rendezvous_input.text().strip()
         asyncio.ensure_future(
-            self.manager.join(room, pseudo, self._rendezvous_url)
+            self.manager.join(
+                room, pseudo, self._rendezvous_url, True, self.password_input.text()
+            )
         )
 
     async def _leave(self) -> None:
@@ -390,6 +466,14 @@ class MainWindow(QMainWindow):
             row.addWidget(box, 1)
             layout.addLayout(row)
 
+        autostart_box = QCheckBox(t("settings.autostart"))
+        autostart_box.setChecked(autostart.is_enabled())
+        hint = QLabel(t("settings.autostart_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#666;")
+        layout.addWidget(autostart_box)
+        layout.addWidget(hint)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -406,6 +490,7 @@ class MainWindow(QMainWindow):
                 screen_fps_box.currentData(),
                 monitor_box.currentData(),
             )
+            autostart.set_enabled(autostart_box.isChecked())
 
     # --- Appels -----------------------------------------------------------
     def _ensure_call_window(self) -> CallWindow:
@@ -503,6 +588,7 @@ class MainWindow(QMainWindow):
             "history": self._on_history,
             "message": self._on_message,
             "host": self._on_host,
+            "security": self._on_security,
             "file-start": self._on_file_progress,
             "file-progress": self._on_file_progress,
             "file-ready": self._on_file_ready,
@@ -527,6 +613,7 @@ class MainWindow(QMainWindow):
         self.pseudo_input.setEnabled(False)
         self.room_input.setEnabled(False)
         self.rendezvous_input.setEnabled(False)
+        self.password_input.setEnabled(False)
         self.new_room_button.setEnabled(False)
         self.join_button.setText(t("connect.leave"))
         self.message_input.setEnabled(True)
@@ -541,6 +628,7 @@ class MainWindow(QMainWindow):
         self.pseudo_input.setEnabled(True)
         self.room_input.setEnabled(True)
         self.rendezvous_input.setEnabled(True)
+        self.password_input.setEnabled(True)
         self.new_room_button.setEnabled(True)
         self.join_button.setText(t("connect.join"))
         self.message_input.setEnabled(False)
@@ -553,6 +641,7 @@ class MainWindow(QMainWindow):
 
     def _on_members(self, payload: object) -> None:
         members = payload or []
+        self._member_rows = list(members)  # type: ignore[arg-type]
         self.members_list.clear()
         for member in members:  # type: ignore[union-attr]
             badges = []
@@ -560,17 +649,73 @@ class MainWindow(QMainWindow):
                 badges.append(t("members.host"))
             if member.get("is_self"):
                 badges.append(t("members.you"))
+            if member.get("verified"):
+                badges.append("🔒 " + t("members.verified"))
+            if member.get("blocked"):
+                badges.append(t("members.blocked"))
+            if member.get("muted"):
+                badges.append(t("members.muted"))
             suffix = f"  ({', '.join(badges)})" if badges else ""
             item = QListWidgetItem(f"{member['pseudo']}{suffix}")
             item.setForeground(Qt.GlobalColor.black)
             self.members_list.addItem(item)
         self.members_label.setText(t("members.title", count=len(members)))
 
+    def _member_menu(self, pos) -> None:
+        index = self.members_list.indexAt(pos)
+        if not index.isValid() or index.row() >= len(self._member_rows):
+            return
+        row = self._member_rows[index.row()]
+        if row.get("is_self"):
+            return
+        peer_id = row["id"]
+        menu = QMenu(self)
+        menu.addAction(t("peer.show_fingerprint"), lambda: self._show_fingerprint(row))
+        menu.addAction(
+            t("peer.unverify") if row.get("verified") else t("peer.verify"),
+            lambda: self.manager.set_peer_verified(peer_id, not row.get("verified")),
+        )
+        menu.addAction(
+            t("peer.unmute") if row.get("muted") else t("peer.mute"),
+            lambda: self.manager.set_peer_muted(peer_id, not row.get("muted")),
+        )
+        menu.addAction(
+            t("peer.unblock") if row.get("blocked") else t("peer.block"),
+            lambda: self.manager.set_peer_blocked(peer_id, not row.get("blocked")),
+        )
+        menu.exec(self.members_list.mapToGlobal(pos))
+
+    def _show_fingerprint(self, row: dict) -> None:
+        fingerprint = row.get("fingerprint") or self.manager.fingerprint_of(row["id"]) or "—"
+        QMessageBox.information(
+            self,
+            t("peer.fingerprint_title", pseudo=row["pseudo"]),
+            t("peer.fingerprint_body", pseudo=row["pseudo"], fingerprint=fingerprint),
+        )
+
+    def _on_security(self, payload: object) -> None:
+        data = payload or {}
+        if data.get("kind") == "cle-changee":
+            QMessageBox.critical(
+                self,
+                t("app.title"),
+                t("security.key_changed", pseudo=data.get("pseudo", "")),
+            )
+
     def _on_history(self, payload: object) -> None:
         self._rerender()
 
     def _on_message(self, payload: object) -> None:
-        self._append_entry(payload)  # type: ignore[arg-type]
+        entry = payload or {}
+        self._append_entry(entry)  # type: ignore[arg-type]
+        if (
+            entry.get("origin") != self.manager.identity.peer_id  # type: ignore[union-attr]
+            and not self.isActiveWindow()
+        ):
+            self._notify(
+                t("tray.new_message", pseudo=entry.get("pseudo", "")),  # type: ignore[union-attr]
+                str(entry.get("body", ""))[:180],  # type: ignore[union-attr]
+            )
 
     def _on_host(self, payload: object) -> None:
         if payload:
@@ -664,6 +809,15 @@ class MainWindow(QMainWindow):
 
     # --- Fermeture --------------------------------------------------------
     def closeEvent(self, event: QCloseEvent) -> None:
+        # Avec une icône de zone de notification, la croix réduit Ruche au lieu
+        # de quitter : c'est ce qui permet de continuer à recevoir les messages.
+        if self.tray is not None:
+            event.ignore()
+            self.hide()
+            self.tray.showMessage(
+                config.APP_NAME, t("tray.still_running"), self._tray_icon(), 4000
+            )
+            return
         if self.manager.room is not None:
             asyncio.ensure_future(self.manager.leave())
         if self.host.hosting:

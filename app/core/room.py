@@ -12,10 +12,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+import time
 from pathlib import Path
 from typing import Callable
 
 from .. import config
+from . import crypto
 from .files import CHUNK_SIZE, FileStore
 from .history import HistoryLog
 from .identity import Identity, save as save_identity
@@ -30,6 +32,8 @@ log = logging.getLogger("ruche.room")
 Listener = Callable[[str, object], None]
 
 AUTO_FETCH_MAX = 8 * 1024 * 1024  # images récupérées automatiquement jusqu'à 8 Mo
+RATE_LIMIT = 40      # messages acceptés par pair…
+RATE_WINDOW = 60.0   # …et par minute
 
 
 class RoomManager:
@@ -51,6 +55,13 @@ class RoomManager:
         self._member_sources: dict[str, set[str]] = {}
         self.room: str | None = None
         self.host_id: str | None = None
+        # Confiance et modération
+        self.room_key = None
+        self._trust: dict[str, dict] = {}
+        self._blocked: set[str] = set()
+        self._muted: set[str] = set()
+        self._rate: dict[str, list[float]] = {}
+        self._rate_warned: set[str] = set()
 
         # Appels
         self.call_active = False
@@ -104,13 +115,25 @@ class RoomManager:
 
     # --- Entrée / sortie de salon ----------------------------------------
     async def join(
-        self, room: str, pseudo: str, rendezvous_url: str = "", use_lan: bool = True
+        self,
+        room: str,
+        pseudo: str,
+        rendezvous_url: str = "",
+        use_lan: bool = True,
+        password: str = "",
     ) -> None:
         self._loop = asyncio.get_running_loop()
         self.room = room
         self.identity.pseudo = pseudo
         save_identity(self.identity)
         self.transport.configure(self.identity.peer_id, pseudo)
+
+        # Chiffrement de bout en bout si un mot de passe est fourni.
+        self.room_key = crypto.derive_room_key(password, room) if password else None
+        self.history.configure(
+            self.identity.private_key, self.identity.public_key, self.room_key
+        )
+        self._load_trust()
 
         self.members = {self.identity.peer_id: pseudo}
         self._member_sources = {}
@@ -175,6 +198,9 @@ class RoomManager:
         self.members = {}
         self.host_id = None
         self.room = None
+        self.room_key = None
+        self._rate.clear()
+        self._rate_warned.clear()
         self._emit("left", None)
 
     # --- Découverte : rappels du rendez-vous -----------------------------
@@ -210,6 +236,74 @@ class RoomManager:
         if peer_id not in self.members:
             return
         self._remove_member_now(peer_id)
+
+    # --- Confiance : clés, blocage, sourdine ------------------------------
+    def _load_trust(self) -> None:
+        self._trust = {row["peer_id"]: row for row in self.storage.all_peers()}
+        self._blocked = {pid for pid, row in self._trust.items() if row.get("blocked")}
+        self._muted = {pid for pid, row in self._trust.items() if row.get("muted")}
+
+    def _register_peer(self, peer_id: str, pseudo: str, public_key: str) -> None:
+        """Enregistre un pair et sa clé (confiance à la première vue).
+
+        Une clé déjà connue n'est jamais remplacée : si elle change, c'est le
+        signe d'une usurpation, et on refuse le pair."""
+        if not peer_id or peer_id == self.identity.peer_id:
+            return
+        if public_key:
+            if crypto.peer_id_for(public_key) != peer_id:
+                self._emit("status", f"identité incohérente reçue de {pseudo or peer_id[:8]} — ignorée")
+                return
+            known = self._trust.get(peer_id)
+            if known and known.get("public_key") and known["public_key"] != public_key:
+                self._emit(
+                    "security",
+                    {
+                        "kind": "cle-changee",
+                        "peer_id": peer_id,
+                        "pseudo": pseudo or peer_id[:8],
+                    },
+                )
+                return
+            self.storage.remember_peer(peer_id, public_key, pseudo)
+        self._load_trust()
+        self._add_member(peer_id, pseudo)
+
+    def _is_blocked(self, peer_id: str) -> bool:
+        return peer_id in self._blocked
+
+    def set_peer_blocked(self, peer_id: str, blocked: bool) -> None:
+        self.storage.remember_peer(peer_id, "", self.members.get(peer_id, ""))
+        self.storage.set_peer_flag(peer_id, "blocked", blocked)
+        self._load_trust()
+        self._emit("status", ("pair bloqué" if blocked else "pair débloqué"))
+        self._emit_members()
+
+    def set_peer_muted(self, peer_id: str, muted: bool) -> None:
+        self.storage.remember_peer(peer_id, "", self.members.get(peer_id, ""))
+        self.storage.set_peer_flag(peer_id, "muted", muted)
+        self._load_trust()
+        self._emit_members()
+
+    def set_peer_verified(self, peer_id: str, verified: bool) -> None:
+        self.storage.remember_peer(peer_id, "", self.members.get(peer_id, ""))
+        self.storage.set_peer_flag(peer_id, "verified", verified)
+        self._load_trust()
+        self._emit_members()
+
+    def is_muted(self, peer_id: str) -> bool:
+        return peer_id in self._muted
+
+    def peers(self) -> list[dict]:
+        return self.storage.all_peers()
+
+    def fingerprint_of(self, peer_id: str) -> str | None:
+        row = self._trust.get(peer_id)
+        key = (row or {}).get("public_key") or ""
+        return crypto.fingerprint(key) if key else None
+
+    def room_password_hint(self, password: str) -> str:
+        return crypto.password_hint(password, self.room or "")
 
     def _remove_member(self, peer_id: str, source: str = "rv") -> None:
         sources = self._member_sources.get(peer_id)
@@ -287,18 +381,23 @@ class RoomManager:
                 "t": "hello",
                 "id": self.identity.peer_id,
                 "pseudo": self.identity.pseudo,
+                "pub": self.identity.public_key,
             },
         )
         await self.transport.send_to(
-            peer_id, {"t": "sync", "entries": self.history.all_sorted()}
+            peer_id, {"t": "sync", "entries": self.history.raw_entries()}
         )
 
     def _on_transport_message(self, peer_id: str, data: dict) -> None:
         kind = data.get("t")
         if kind == "hello":
-            self._add_member(data.get("id", peer_id), data.get("pseudo", ""))
+            self._register_peer(
+                data.get("id", peer_id), data.get("pseudo", ""), data.get("pub", "")
+            )
         elif kind == "chat":
-            self._merge_and_emit([data.get("entry", {})])
+            entry = data.get("entry", {})
+            if isinstance(entry, dict) and self._rate_ok(entry.get("origin", "")):
+                self._merge_and_emit([entry])
         elif kind == "sync":
             self._merge_and_emit(data.get("entries", []))
         elif kind == "file-want":
@@ -328,8 +427,30 @@ class RoomManager:
         elif kind == "bye":
             self._forget_member(peer_id)
 
+    def _rate_ok(self, peer_id: str) -> bool:
+        """Limite simple : au-delà de 40 messages par minute, on ignore."""
+        if not peer_id or peer_id == self.identity.peer_id:
+            return True
+        now = time.time()
+        bucket = self._rate.setdefault(peer_id, [])
+        bucket[:] = [stamp for stamp in bucket if now - stamp < RATE_WINDOW]
+        if len(bucket) >= RATE_LIMIT:
+            if peer_id not in self._rate_warned:
+                self._rate_warned.add(peer_id)
+                self._emit(
+                    "status",
+                    f"{self.members.get(peer_id, peer_id[:8])} envoie trop de messages — limité",
+                )
+            return False
+        bucket.append(now)
+        return True
+
     def _merge_and_emit(self, entries: list[dict]) -> None:
-        clean = [e for e in entries if isinstance(e, dict) and e.get("id")]
+        clean = [
+            e
+            for e in entries
+            if isinstance(e, dict) and e.get("id") and not self._is_blocked(e.get("origin", ""))
+        ]
         for entry in self.history.merge(clean):
             self._emit("message", entry)
             if entry.get("kind") == "file":
@@ -340,29 +461,33 @@ class RoomManager:
         body = body.strip()
         if not body or not self.room:
             return
-        entry = self.history.add_local(
+        raw = self.history.add_local(
             "text",
             body,
             origin=self.identity.peer_id,
             pseudo=self.identity.pseudo,
         )
-        self._emit("message", entry)
-        await self.transport.broadcast({"t": "chat", "entry": entry})
+        view = self.history.display(raw)
+        if view is not None:
+            self._emit("message", view)
+        await self.transport.broadcast({"t": "chat", "entry": raw})
 
     # --- Fichiers ---------------------------------------------------------
     async def send_file(self, path) -> None:
         if not self.room:
             return
         record = self.files.prepare(Path(path))
-        entry = self.history.add_local(
+        raw = self.history.add_local(
             "file",
             record.name,
             origin=self.identity.peer_id,
             pseudo=self.identity.pseudo,
             extra=record.as_extra(),
         )
-        self._emit("message", entry)
-        await self.transport.broadcast({"t": "chat", "entry": entry})
+        view = self.history.display(raw)
+        if view is not None:
+            self._emit("message", view)
+        await self.transport.broadcast({"t": "chat", "entry": raw})
 
     async def request_file(self, file_id: str) -> None:
         local = self.files.path(file_id)
@@ -621,12 +746,17 @@ class RoomManager:
     def _emit_members(self) -> None:
         rows = []
         for peer_id, pseudo in self.members.items():
+            trust = self._trust.get(peer_id) or {}
             rows.append(
                 {
                     "id": peer_id,
                     "pseudo": pseudo,
                     "is_self": peer_id == self.identity.peer_id,
                     "is_host": peer_id == self.host_id,
+                    "verified": bool(trust.get("verified")),
+                    "blocked": peer_id in self._blocked,
+                    "muted": peer_id in self._muted,
+                    "fingerprint": self.fingerprint_of(peer_id),
                 }
             )
         rows.sort(key=lambda r: (not r["is_host"], r["pseudo"].lower()))

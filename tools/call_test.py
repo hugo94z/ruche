@@ -38,7 +38,7 @@ from app import config  # noqa: E402
 _TMP = Path(tempfile.mkdtemp(prefix="ruche-call-"))
 config.data_dir = lambda: _TMP  # type: ignore[assignment]
 
-from app.core.identity import Identity  # noqa: E402
+from app.core.identity import Identity, create as create_identity  # noqa: E402
 from app.core.media import TestVideoTrack, frame_to_rgb  # noqa: E402
 from app.core.room import RoomManager  # noqa: E402
 from app.core.storage import Storage  # noqa: E402
@@ -129,9 +129,7 @@ class DummySink:
 
 
 def make_identity(pseudo: str) -> Identity:
-    return Identity(
-        peer_id=uuid.uuid4().hex[:16], pseudo=pseudo, public_key="", private_key=""
-    )
+    return create_identity(pseudo)
 
 
 async def wait_for(predicate, timeout: float = 25.0, label: str = "") -> bool:

@@ -32,6 +32,26 @@ def _derive_peer_id(public_key_bytes: bytes) -> str:
     return hashlib.sha256(public_key_bytes).hexdigest()[:16]
 
 
+def create(pseudo: str) -> Identity:
+    """Crée une identité neuve avec de vraies clés (utilisé par les tests)."""
+    private_key = Ed25519PrivateKey.generate()
+    private_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return Identity(
+        peer_id=_derive_peer_id(public_bytes),
+        pseudo=pseudo,
+        public_key=base64.b64encode(public_bytes).decode("ascii"),
+        private_key=base64.b64encode(private_bytes).decode("ascii"),
+    )
+
+
 def load_or_create(pseudo: str = "") -> Identity:
     """Charge l'identité existante ou en crée une nouvelle."""
     path = config.identity_path()

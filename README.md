@@ -87,6 +87,23 @@ $env:RUCHE_DATA_DIR="$env:TEMP\ruche-bob";   .\.venv\Scripts\python.exe run.py
 
 ---
 
+## Sécurité
+
+- **Signature des messages** — chaque message est signé (Ed25519). Comme
+  l'identifiant d'un pair est dérivé de sa clé publique, **personne ne peut se
+  faire passer pour un autre** : un message falsifié ou attribué à une autre
+  identité est **rejeté**.
+- **Chiffrement de bout en bout** — un **mot de passe de salon** dérive une clé
+  (scrypt) qui chiffre le contenu des messages (texte, pseudo, métadonnées).
+  Ni le serveur de rendez-vous ni un relais TURN ne peuvent les lire.
+- **Empreintes vérifiables** — clic droit sur un membre → *Voir l'empreinte*.
+  Comparez-la de vive voix, puis marquez le pair comme **vérifié**.
+- **Détection d'usurpation** — si un pair se présente avec une **nouvelle clé**,
+  il est ignoré et une alerte s'affiche.
+- **Blocage / sourdine** — clic droit sur un membre.
+- **Limitation de débit** — au-delà de 40 messages par minute, un pair est
+  temporairement ignoré.
+
 ## Comment ça marche
 
 ```

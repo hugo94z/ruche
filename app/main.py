@@ -41,6 +41,9 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
     app.setApplicationDisplayName(config.APP_NAME)
+    # Sans cela, fermer la fenêtre quitterait l'application au lieu de la
+    # réduire en zone de notification.
+    app.setQuitOnLastWindowClosed(False)
 
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
@@ -50,7 +53,9 @@ def main() -> int:
     manager = RoomManager(storage, identity)
 
     window = MainWindow(manager)
-    window.show()
+    # Démarré automatiquement avec Windows : on reste en zone de notification.
+    if "--minimized" not in sys.argv:
+        window.show()
 
     with loop:
         loop.run_forever()
