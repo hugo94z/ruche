@@ -100,7 +100,13 @@ jobs:
               -GitHubUser "${{ github.repository_owner }}" `
               -Publisher "Ruche" -PackageName "Ruche" `
               -Version "${{ steps.version.outputs.value }}"
-          winget validate --manifest "winget\manifests\r\Ruche\Ruche\${{ steps.version.outputs.value }}"
+
+      - name: Valider les manifestes winget
+        # Non bloquant : la release doit etre publiee meme si la validation
+        # winget echoue (l'installateur reste tel quel sur GitHub Releases).
+        continue-on-error: true
+        shell: pwsh
+        run: winget validate --manifest "winget\manifests\r\Ruche\Ruche\${{ steps.version.outputs.value }}"
 
       - name: Publier la version
         shell: pwsh
