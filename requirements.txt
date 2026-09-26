@@ -20,4 +20,5 @@ numpy>=1.26
 pygrabber>=0.2; sys_platform == "win32"
 
 # --- Annulation d'écho ---
-pyaec>=3.0
+# Version existante sur PyPI : 1.0.1 est la dernière publiée (pas de 3.x).
+pyaec>=1.0

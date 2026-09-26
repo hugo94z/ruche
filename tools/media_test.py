@@ -46,8 +46,8 @@ async def measure_pacing(fps: int, seconds: float = 3.0) -> float:
     return count / elapsed
 
 
-def echo_reduction(order_ok: bool = True) -> float:
-    rate, frame, delay, gain = 48000, 480, 240, 0.6
+def echo_reduction(order_ok: bool = True, frame: int = 480) -> float:
+    rate, delay, gain = 48000, 240, 0.6
     rng = np.random.default_rng(3)
     total = 400 * frame
 
@@ -75,6 +75,22 @@ def echo_reduction(order_ok: bool = True) -> float:
     before = rms(mic[: 200 * frame].astype(float))
     after = rms(processed[: 200 * frame])
     return 20 * np.log10(before / after) if after > 0 else 0.0
+
+
+def aec_engaged_at(frame: int) -> bool:
+    """L'annuleur doit être réellement instancié à la taille de trame reçue.
+
+    Régression : pyaec refuse deux tampons de longueurs différentes. Si la
+    taille réelle du micro n'est pas prise en compte, ``cancel_echo`` échoue en
+    silence et l'écho n'est jamais annulé en appel.
+    """
+    aec = EchoCanceller()
+    if not aec.available:
+        return False
+    chunk = np.zeros(frame, dtype=np.int16)
+    aec.push_reference(chunk.copy())
+    aec.process(chunk.copy())
+    return getattr(aec, "_aec", None) is not None and getattr(aec, "_aec_frame", 0) == frame
 
 
 async def main() -> int:
@@ -112,6 +128,18 @@ async def main() -> int:
     erle = echo_reduction()
     print(f"  atténuation d'écho : {erle:.1f} dB")
     results.append(("Écho atténué (≥ 6 dB)", erle >= 6.0))
+
+    # Régression : en appel réel, le micro livre des trames de 20 ms
+    # (FRAME_MS de media.py), et non la taille par défaut de 10 ms.
+    mic_frame = int(48000 * 20 / 1000)
+    results.append(
+        ("Annullation d'écho active à la taille réelle du micro", aec_engaged_at(mic_frame))
+    )
+    erle_real = echo_reduction(frame=mic_frame)
+    print(f"  atténuation à la taille réelle du micro ({mic_frame}) : {erle_real:.1f} dB")
+    # Le seul filtre de bruit atteint ~8 dB : exiger 15 dB prouve que
+    # l'annulation d'écho est bien active, et pas seulement le lissage.
+    results.append(("Écho nettement atténué à la taille réelle (≥ 15 dB)", erle_real >= 15.0))
 
     print("\nRésultats :")
     for label, passed in results:

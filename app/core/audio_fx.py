@@ -36,20 +36,46 @@ class EchoCanceller:
         self._lock = threading.Lock()
         self._reference = np.zeros(frame * 8, dtype=np.int16)
         self._aec = None
+        self._aec_cls = None
+        self._aec_frame = 0
         self.available = False
         self._try_load()
 
     def _try_load(self) -> None:
+        """Charge la bibliothèque ; l'annuleur est instancié à la première trame."""
         try:
             from pyaec import Aec
 
-            self._aec = Aec(self.frame, filter_length=AEC_FILTER, sample_rate=self.rate,
-                            enable_preprocess=True)
+            self._aec_cls = Aec
             self.available = True
-            log.info("annulation d'écho active")
+            log.info("annulation d'écho disponible")
         except Exception as exc:  # DLL absente, plateforme non supportée…
+            self._aec_cls = None
             self.available = False
             log.warning("annulation d'écho indisponible : %s", exc)
+
+    def _ensure_aec(self, size: int) -> None:
+        """Instancie l'annuleur pour la taille de trame réellement reçue.
+
+        pyaec est paramétré pour une taille de trame fixe et ``cancel_echo``
+        refuse deux tampons de longueurs différentes. Or le micro livre des
+        trames de 20 ms alors que ``frame`` vaut 10 ms : sans cet ajustement,
+        chaque appel lèverait une ``ValueError`` avalée en silence et l'écho ne
+        serait jamais annulé.
+        """
+        if self._aec is not None and self._aec_frame == size:
+            return
+        try:
+            self._aec = self._aec_cls(
+                size, filter_length=AEC_FILTER, sample_rate=self.rate,
+                enable_preprocess=True,
+            )
+            self._aec_frame = size
+            self.available = True
+        except Exception as exc:
+            self._aec = None
+            self.available = False
+            log.warning("annulation d'écho inactive : %s", exc)
 
     # --- Référence --------------------------------------------------------
     def push_reference(self, samples: np.ndarray) -> None:
@@ -65,10 +91,20 @@ class EchoCanceller:
     # --- Traitement du micro ---------------------------------------------
     def process(self, mic_frame: np.ndarray) -> np.ndarray:
         """Retire l'écho du micro puis atténue le bruit continu."""
-        if not self.available or self._aec is None:
+        if not self.available or self._aec_cls is None:
             return self._noise_gate(mic_frame)
         with self._lock:
-            reference = self._reference[-self.frame :].copy()
+            n = len(mic_frame)
+            if n > len(self._reference):
+                # Trame micro plus longue que l'historique : on l'agrandit.
+                grown = np.zeros(max(n, 2 * len(self._reference)), dtype=np.int16)
+                grown[-len(self._reference) :] = self._reference
+                self._reference = grown
+            # pyaec exige une référence de même longueur que la trame du micro.
+            reference = self._reference[-n:].copy()
+        self._ensure_aec(len(reference))
+        if self._aec is None:
+            return self._noise_gate(mic_frame)
         try:
             cleaned = np.asarray(
                 self._aec.cancel_echo(

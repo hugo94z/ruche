@@ -339,6 +339,12 @@ Avancement : **6 chantiers sur 6 terminés**.
   clé X25519 (échange éphémère + ChaCha20-Poly1305) ; ils sont remis dès qu'un
   lien vers ce pair s'ouvre, puis supprimés sur accusé de réception. Le chat en
   direct, lui, n'est pas chiffré de bout en bout (choix conservé).
+- L'annulation d'écho a été **réellement cassée** en appel : `media.py` livre
+  des trames micro de 20 ms (960 échantillons) alors que le filtre était calé
+  sur 10 ms (480). `pyaec` refusant deux tampons de longueurs différentes,
+  chaque trame levait une `ValueError` **avalée en silence** : seul le
+  filtre de bruit passait. L'annuleur est désormais instancié à la taille
+  réellement reçue (~26 dB mesurés), et `media_test.py` couvre ce chemin.
 - La **purge du cache** liste les fichiers connus (taille, vignette) et supprime
   la sélection du disque et de la base ; les transferts inachevés se nettoient
   aussi. La **mise à jour par bouton** interroge l'API GitHub et ouvre la page
@@ -348,7 +354,7 @@ Avancement : **6 chantiers sur 6 terminés**.
   `installer/WINGET.md` §11.
 - Les **prototypes de dérisquage** sont conservés : `tools/aec_poc.py`
   (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
-- La suite de tests compte **135 vérifications**, toutes vertes.
+- La suite de tests compte **137 vérifications**, toutes vertes.
 
 ## Empaqueter l'application
 
