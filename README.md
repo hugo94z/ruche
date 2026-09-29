@@ -44,7 +44,7 @@ Toutes les phases de la feuille de route sont réalisées (voir plus bas).
 
 ### Windows — installateur ou winget
 
-Téléchargez **`Ruche-Setup-0.2.0.exe`** depuis la page des versions :
+Téléchargez **`Ruche-Setup-1.0.1.exe`** depuis la page des versions :
 
 <https://github.com/hugo94z/ruche/releases/latest>
 
@@ -308,9 +308,9 @@ ruche.spec / build.ps1      empaquetage PyInstaller
 
 ---
 
-## État du développement (v1.0.0 en cours)
+## État du développement (v1.0.1)
 
-Objectif : **une seule version 1.0.0** regroupant 22 fonctionnalités, puis publication.
+Objectif : **une seule version 1.x** regroupant 22 fonctionnalités, puis publication.
 Avancement : **6 chantiers sur 6 terminés**.
 
 | Chantier | Contenu | État |

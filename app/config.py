@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 APP_NAME = "Ruche"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 # Dépôt GitHub utilisé pour la mise à jour par bouton.
 GITHUB_REPO = "hugo94z/ruche"

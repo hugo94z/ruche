@@ -21,7 +21,7 @@ Sur le **Bureau**, double-cliquez sur le raccourci **Ruche**.
 
 | Méthode | Commande |
 |---|---|
-| Installateur | `Ruche-Setup-0.2.0.exe` (page des versions GitHub) |
+| Installateur | `Ruche-Setup-1.0.1.exe` (page des versions GitHub) |
 | winget | `winget install Ruche.Ruche` |
 
 L'installation se fait **par utilisateur**, dans `%LOCALAPPDATA%\Programs\Ruche`
