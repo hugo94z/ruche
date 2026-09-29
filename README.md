@@ -345,6 +345,12 @@ Avancement : **6 chantiers sur 6 terminés**.
   chaque trame levait une `ValueError` **avalée en silence** : seul le
   filtre de bruit passait. L'annuleur est désormais instancié à la taille
   réellement reçue (~26 dB mesurés), et `media_test.py` couvre ce chemin.
+- Second défaut du même annuleur : quand le **haut-parleur ne jouait rien**, la
+  référence était silencieuse et `pyaec` atténuait alors fortement le micro
+  (bip de test : 5668 → 15). On n'était donc audible que pendant que le
+  correspondant parlait. L'annuleur est maintenant **court-circuité** quand la
+  référence est muette — aucun écho ne peut revenir — ce qui préserve 99 % de
+  la voix (`media_test.py` verrouille cet invariant).
 - La **purge du cache** liste les fichiers connus (taille, vignette) et supprime
   la sélection du disque et de la base ; les transferts inachevés se nettoient
   aussi. La **mise à jour par bouton** interroge l'API GitHub et ouvre la page
@@ -354,7 +360,7 @@ Avancement : **6 chantiers sur 6 terminés**.
   `installer/WINGET.md` §11.
 - Les **prototypes de dérisquage** sont conservés : `tools/aec_poc.py`
   (annulation d'écho) et `tools/fps_poc.py` (tenue des 30 fps).
-- La suite de tests compte **137 vérifications**, toutes vertes.
+- La suite de tests compte **138 vérifications**, toutes vertes.
 
 ## Empaqueter l'application
 

@@ -77,6 +77,35 @@ def echo_reduction(order_ok: bool = True, frame: int = 480) -> float:
     return 20 * np.log10(before / after) if after > 0 else 0.0
 
 
+def silent_reference_keeps_voice() -> float:
+    """Part de la voix conservée quand le haut-parleur ne joue rien.
+
+    Régression : avec une référence silencieuse, pyaec atténuait fortement le
+    micro, rendant la voix inaudible pour le correspondant dès qu'il ne parlait
+    pas lui-même.
+    """
+    rng = np.random.default_rng(11)
+    frame = 960
+    total = 200 * frame
+    voice = (rng.standard_normal(total) * 2500).astype(np.int16)
+
+    def rms(x) -> float:
+        a = np.asarray(x, dtype=float)
+        return float(np.sqrt(np.mean(a * a))) if a.size else 0.0
+
+    aec = EchoCanceller()
+    if not aec.available:
+        return 100.0  # sans pyaec, aucun risque d'atténuation
+    out = []
+    for i in range(0, total - frame, frame):
+        aec.push_reference(np.zeros(frame, dtype=np.int16))  # haut-parleur muet
+        out.append(aec.process(voice[i : i + frame].copy()))
+    processed = np.concatenate(out)
+    # Ce que le seul filtre de bruit laisse passer : la référence à ne pas dépasser.
+    reference = aec._noise_gate(voice[: len(processed)])
+    return 100 * (rms(processed) / rms(reference)) if rms(reference) else 0.0
+
+
 def aec_engaged_at(frame: int) -> bool:
     """L'annuleur doit être réellement instancié à la taille de trame reçue.
 
@@ -87,9 +116,12 @@ def aec_engaged_at(frame: int) -> bool:
     aec = EchoCanceller()
     if not aec.available:
         return False
-    chunk = np.zeros(frame, dtype=np.int16)
-    aec.push_reference(chunk.copy())
-    aec.process(chunk.copy())
+    # Référence active (sinon, à raison, l'annuleur est court-circuité).
+    rng = np.random.default_rng(5)
+    far = (rng.standard_normal(frame) * 3000).astype(np.int16)
+    mic = (rng.standard_normal(frame) * 3000).astype(np.int16)
+    aec.push_reference(far.copy())
+    aec.process(mic.copy())
     return getattr(aec, "_aec", None) is not None and getattr(aec, "_aec_frame", 0) == frame
 
 
@@ -140,6 +172,11 @@ async def main() -> int:
     # Le seul filtre de bruit atteint ~8 dB : exiger 15 dB prouve que
     # l'annulation d'écho est bien active, et pas seulement le lissage.
     results.append(("Écho nettement atténué à la taille réelle (≥ 15 dB)", erle_real >= 15.0))
+
+    # Régression : haut-parleur muet → la voix doit passer (pas d'écho possible).
+    keep = silent_reference_keeps_voice()
+    print(f"  voix conservée, haut-parleur muet : {keep:.0f} %")
+    results.append(("Voix préservée quand le haut-parleur est muet (≥ 95 %)", keep >= 95.0))
 
     print("\nRésultats :")
     for label, passed in results:

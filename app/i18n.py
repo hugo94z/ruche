@@ -97,6 +97,12 @@ STRINGS: dict[str, str] = {
     "call.quality": "Qualité vidéo",
     "call.screen_fps": "Partage d'écran (images/s)",
     "call.monitor": "Écran à partager",
+    "call.test_mic": "Tester le micro",
+    "call.test_speaker": "Tester le haut-parleur",
+    "call.mic_level": "Micro : niveau maximal {percent} % — parlez pendant le test",
+    "call.mic_silent": "Micro : aucun son détecté. Vérifiez qu'il n'est pas coupé (touche muet, réglages Windows).",
+    "call.speaker_tested": "Son de test joué : l'avez-vous entendu ? Sinon, changez de haut-parleur.",
+    "call.audio_failed": "Périphérique audio impossible : {error}",
 
     # Hébergement d'un rendez-vous
     "host.button": "Héberger un rendez-vous",

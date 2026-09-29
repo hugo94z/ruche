@@ -646,6 +646,22 @@ class MainWindow(QMainWindow):
             layout.addLayout(row_turn)
         layout.addWidget(turn_hint)
 
+        # Tester les périphériques : le périphérique « par défaut » de Windows
+        # peut être virtuel (Steam, VB-Cable…), d'où des appels muets.
+        test_row = QHBoxLayout()
+        test_mic_button = QPushButton(t("call.test_mic"))
+        test_mic_button.clicked.connect(
+            lambda: self._test_microphone(mic_box.currentData())
+        )
+        test_row.addWidget(test_mic_button)
+        test_speaker_button = QPushButton(t("call.test_speaker"))
+        test_speaker_button.clicked.connect(
+            lambda: self._test_speaker(speaker_box.currentData())
+        )
+        test_row.addWidget(test_speaker_button)
+        test_row.addStretch(1)
+        layout.addLayout(test_row)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -684,6 +700,59 @@ class MainWindow(QMainWindow):
             app = QGuiApplication.instance()
             if app is not None:
                 apply_theme(app, chosen)
+
+    # --- Test des périphériques audio ------------------------------------
+    def _test_speaker(self, device: int | None) -> None:
+        asyncio.ensure_future(self._run_speaker_test(device))
+
+    async def _run_speaker_test(self, device: int | None) -> None:
+        def play() -> None:
+            import numpy as np
+            import sounddevice as sd
+
+            samples = np.arange(int(48000 * 1.0))
+            tone = (np.sin(2 * np.pi * 440 * samples / 48000) * 6000).astype("int16")
+            sd.play(tone, samplerate=48000, device=device)
+            sd.wait()
+
+        try:
+            await asyncio.get_event_loop().run_in_executor(None, play)
+            self.statusBar().showMessage(t("call.speaker_tested"))
+        except Exception as exc:
+            QMessageBox.warning(
+                self, t("call.settings"), t("call.audio_failed", error=exc)
+            )
+
+    def _test_microphone(self, device: int | None) -> None:
+        asyncio.ensure_future(self._run_microphone_test(device))
+
+    async def _run_microphone_test(self, device: int | None) -> None:
+        def record() -> float:
+            import numpy as np
+            import sounddevice as sd
+
+            data = sd.rec(
+                int(48000 * 1.5),
+                samplerate=48000,
+                channels=1,
+                dtype="int16",
+                device=device,
+            )
+            sd.wait()
+            return float(np.abs(data).max())
+
+        try:
+            peak = await asyncio.get_event_loop().run_in_executor(None, record)
+        except Exception as exc:
+            QMessageBox.warning(
+                self, t("call.settings"), t("call.audio_failed", error=exc)
+            )
+            return
+        percent = int(peak / 32768 * 100)
+        if percent <= 1:
+            self.statusBar().showMessage(t("call.mic_silent"))
+        else:
+            self.statusBar().showMessage(t("call.mic_level", percent=percent))
 
     # --- Cache et mises à jour -------------------------------------------
     def _open_cache_dialog(self) -> None:

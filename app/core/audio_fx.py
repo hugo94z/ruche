@@ -25,6 +25,8 @@ log = logging.getLogger("ruche.audio")
 SAMPLE_RATE = 48000
 FRAME = 480          # 10 ms
 AEC_FILTER = 2048    # ~43 ms de trajet acoustique couvert
+# En dessous de ce niveau, on considère que le haut-parleur ne joue rien.
+REFERENCE_FLOOR = 50
 
 
 class EchoCanceller:
@@ -102,6 +104,12 @@ class EchoCanceller:
                 self._reference = grown
             # pyaec exige une référence de même longueur que la trame du micro.
             reference = self._reference[-n:].copy()
+        # Rien ne joue : aucun écho ne peut revenir dans le micro. On
+        # court-circuite l'annuleur, car pyaec atténue fortement le micro quand
+        # la référence est silencieuse — la voix devenait alors inaudible pour
+        # le correspondant tant qu'il ne parlait pas lui-même.
+        if reference.size and int(np.abs(reference).max()) < REFERENCE_FLOOR:
+            return self._noise_gate(mic_frame)
         self._ensure_aec(len(reference))
         if self._aec is None:
             return self._noise_gate(mic_frame)

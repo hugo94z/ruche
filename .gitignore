@@ -8,6 +8,8 @@ tools/_*.log
 # PyInstaller
 build/
 dist/
+build-fixed/
+dist-fixed/
 *.spec.bak
 
 # Sorties générées
