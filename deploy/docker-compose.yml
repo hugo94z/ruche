@@ -14,7 +14,10 @@ services:
     working_dir: /app
     volumes:
       - ..:/app
-    command: python run_rendezvous.py --host 0.0.0.0 --port 8765
+    # aiohttp n'est pas fourni par l'image de base : on l'installe au demarrage.
+    command: >
+      sh -c "pip install --no-cache-dir 'aiohttp>=3.10' &&
+             python run_rendezvous.py --host 0.0.0.0 --port 8765"
     ports:
       - "8765:8765"
     restart: unless-stopped
