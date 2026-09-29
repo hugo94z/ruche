@@ -123,6 +123,29 @@ class MainWindow(QMainWindow):
 
         manager.add_listener(self._relay_event)
         self.core_event.connect(self._handle_event)
+        self._apply_saved_devices()
+
+    # --- Périphériques enregistrés ----------------------------------------
+    def _apply_saved_devices(self) -> None:
+        """Réapplique les périphériques choisis (le défaut système peut être
+        un périphérique virtuel, ex. Steam, d'où des appels muets)."""
+        audio = config.load_settings().get("audio") or {}
+        self.manager.set_media_devices(
+            audio.get("camera"),
+            audio.get("microphone"),
+            audio.get("speaker"),
+            audio.get("profile"),
+            audio.get("screen_fps"),
+            audio.get("monitor"),
+        )
+
+    @staticmethod
+    def _select_data(box: QComboBox, value: object) -> None:
+        if value is None:
+            return
+        index = box.findData(value)
+        if index >= 0:
+            box.setCurrentIndex(index)
 
     # --- Écran d'accueil (premier lancement) ------------------------------
     def maybe_show_welcome(self) -> None:
@@ -588,6 +611,18 @@ class MainWindow(QMainWindow):
         for index, label in enumerate(monitors, start=1):
             monitor_box.addItem(label, index)
 
+        # Pré-sélection des choix enregistrés.
+        saved = config.load_settings().get("audio") or {}
+        if saved.get("camera"):
+            cam_index = cam_box.findText(saved["camera"])
+            if cam_index >= 0:
+                cam_box.setCurrentIndex(cam_index)
+        self._select_data(mic_box, saved.get("microphone"))
+        self._select_data(speaker_box, saved.get("speaker"))
+        self._select_data(quality_box, saved.get("profile"))
+        self._select_data(screen_fps_box, saved.get("screen_fps"))
+        self._select_data(monitor_box, saved.get("monitor"))
+
         for label, box in (
             (t("call.camera"), cam_box),
             (t("call.microphone"), mic_box),
@@ -678,6 +713,17 @@ class MainWindow(QMainWindow):
                 screen_fps_box.currentData(),
                 monitor_box.currentData(),
             )
+            # Mémoriser les périphériques : le défaut système peut être virtuel.
+            settings = config.load_settings()
+            settings["audio"] = {
+                "camera": camera,
+                "microphone": mic_box.currentData(),
+                "speaker": speaker_box.currentData(),
+                "profile": quality_box.currentData(),
+                "screen_fps": screen_fps_box.currentData(),
+                "monitor": monitor_box.currentData(),
+            }
+            config.save_settings(settings)
             autostart.set_enabled(autostart_box.isChecked())
 
             # Enregistrer les serveurs ICE (STUN par défaut + TURN si rempli).

@@ -97,6 +97,12 @@ Bouton **Périphériques** (fenêtre principale) : caméra, micro, haut-parleur.
 - Sans caméra, une **mire de test** animée est envoyée.
 - Le son est repris via `sounddevice` ; les noms de périphériques sont listés
   avec leur numéro.
+- Deux boutons de vérification : **Tester le haut-parleur** (joue un bip) et
+  **Tester le micro** (affiche le niveau capté pendant 1,5 s).
+- ⚠️ Le périphérique **par défaut de Windows** peut être un périphérique
+  **virtuel** (Steam Streaming, VB-Cable…), d'où des appels muets. Choisissez
+  explicitement un micro et un haut-parleur réels : **vos choix sont
+  enregistrés** et réappliqués aux lancements suivants.
 
 ### 3.6 Plusieurs salons et messages privés
 
